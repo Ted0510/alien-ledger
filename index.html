@@ -1526,27 +1526,6 @@ function shrinkImg(file){
     img.onerror = rej; img.src = URL.createObjectURL(file);
   });
 }
-$('#scanBtn').onclick = () => $('#scanFile').click();
-$('#scanFile').onchange = async e => {
-  const f = e.target.files[0]; if (!f) return;
-  toast('📷 正在读收据…');
-  try{
-    const b64 = await shrinkImg(f);
-    const j = await post({action:'scan', image:b64, mime:'image/jpeg'});
-    if (!j.ok) { toast(j.error); return; }
-    const x = j.result || {};
-    window.pendingReceipt = j.receipt || '';
-    state.type = '支出';
-    state.amount = x.amount ? String(x.amount) : '';
-    state.cat = CATS['支出'].includes(x.category) ? x.category : '其他';
-    buildPills(); go('add');
-    if (x.date) $('#date').value = x.date;
-    $('#note').value = x.merchant || '';
-    toast('请确认金额和类别，再按保存');
-  }catch(err){ toast('扫描失败，可以手动记'); }
-  finally{ e.target.value = ''; }
-};
-
 /* 发薪分配：照计划预先填好，一次记完 */
 const PLAN_DONE = { Brother:'2028-10', Church:'2027-03', Stewart:'2027-10' };
 function paydayLines(){
