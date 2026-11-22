@@ -367,7 +367,7 @@
     <div class="hero">
       <div id="alienBox" class="alien"></div>
       <div style="flex:1">
-        <div class="bubble" id="bubble">Luna：今天也一起记账吧</div>
+        <div class="bubble" id="bubble">Luna：今天花了多少？老实记下来。</div>
         <div class="row" style="margin-top:12px">
           <span class="pixel" id="lvlTxt">LV 1</span>
           <span class="muted" id="stageTxt">幼体</span>
@@ -454,6 +454,7 @@
   <h1>设定</h1>
   <div class="card">
     <button class="btn ghost" id="cfgOpen2" style="background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none">修改网址和 PIN</button>
+    <button class="btn ghost" id="musToggle" style="margin-top:12px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none"></button>
     <button class="btn ghost" id="sndToggle" style="margin-top:12px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none"></button>
   </div>
 </section>
@@ -533,8 +534,8 @@ const sfx = {
     o.start(now); o.stop(now+dur+0.02);
   },
   tick(){ this.tone(1500, 0, 0.035, 'square', 0.025); },
-  pop(){ this.tone(520, 0, 0.09, 'sine', 0.12, 2.2); },
-  success(){ [660, 880, 1320].forEach((f,i) => this.tone(f, i*0.07, 0.18, 'triangle', 0.12)); },
+  pop(){ this.tone(520, 0, 0.09, 'square', 0.06, 2.2); },
+  success(){ [660, 880, 1320].forEach((f,i) => this.tone(f, i*0.07, 0.16, 'square', 0.06)); },
   levelup(){ [523, 659, 784, 1046].forEach((f,i) => this.tone(f, i*0.09, 0.22, 'square', 0.06)); },
   error(){ this.tone(220, 0, 0.24, 'sawtooth', 0.07, 0.6); },
 };
@@ -641,6 +642,9 @@ function alienSprite(o = {}){
   } else if (eyes==='happy'){  // 笑眯眯 ∩∩
     set(15,5,'e'); set(15,6,'e'); set(16,4,'e'); set(16,7,'e');
     set(15,12,'e'); set(15,13,'e'); set(16,11,'e'); set(16,14,'e');
+  } else if (eyes==='stern'){   // Luna 皱眉瞪人
+    [...L,...Rr].forEach(x => { set(15,x,'e'); set(16,x,'e'); });
+    set(13,5,'e'); set(14,6,'e'); set(13,13,'e'); set(14,12,'e');
   } else if (eyes==='closed'){
     [5,6,12,13].forEach(x => set(16,x,'e'));
   } else if (eyes==='x'){
@@ -687,9 +691,9 @@ function alienSprite(o = {}){
 /* 首页：主角 + 伴侣并排。主角呆呆的，伴侣笑眯眯 */
 function alienSVG(mood, look){
   let me, her;
-  if (mood==='dizzy'){ me = {eyes:'x', mouth:'open'};              her = {who:'partner', eyes:'dot', mouth:'open'}; }
-  else if (mood==='tense'){ me = {eyes:'side', mouth:'pout', sweat:true}; her = {who:'partner', eyes:'dot', mouth:'flat'}; }
-  else { me = {eyes: look || 'dot', mouth:'flat'};                 her = {who:'partner', eyes:'happy', mouth:'smile'}; }
+  if (mood==='dizzy'){ me = {eyes:'x', mouth:'open'};              her = {who:'partner', eyes:'stern', mouth:'open'}; }
+  else if (mood==='tense'){ me = {eyes:'side', mouth:'pout', sweat:true}; her = {who:'partner', eyes:'stern', mouth:'pout'}; }
+  else { me = {eyes: look || 'dot', mouth:'flat'};                 her = {who:'partner', eyes:'dot', mouth:'smile'}; }
   return `<div class="duo"><div class="d-main">${alienSprite(me)}</div><div class="d-partner">${alienSprite(her)}</div></div>`;
 }
 /* 她平常会不时抬眼发呆 */
@@ -730,7 +734,7 @@ function bossSVG(hpPct, dead){
 let curMood = 'happy';
 Object.assign(sfx, {
   coin(){ this.tone(988,0,0.08,'square',0.07); this.tone(1319,0.08,0.2,'square',0.07); },
-  fanfare(){ [523,659,784,1046,1318].forEach((f,i)=>this.tone(f,i*0.1,0.26,'triangle',0.12)); },
+  fanfare(){ [523,659,784,1046,1318,1046,1318].forEach((f,i)=>this.tone(f,i*0.09,0.2,'square',0.06)); },
   zap(){ this.tone(900,0,0.28,'sawtooth',0.07,0.12); },
   whoosh(){ this.tone(260,0,0.32,'sine',0.07,3.2); },
   poke(){ this.tone(640,0,0.07,'sine',0.12,1.7); this.tone(860,0.07,0.07,'sine',0.1,1.4); },
@@ -825,11 +829,11 @@ Object.assign(sfx, {
   boom(){ this.tone(140,0,0.4,'sawtooth',0.08,0.4); },
 });
 const SCENE_MAP = {
-  '餐饮':    {kind:'eat',   title:'开吃！',        text:'Aylin 咬一口 {amt}，Luna 在旁边笑'},
+  '餐饮':    {kind:'eat',   title:'开吃！',        text:'Aylin 吃掉 {amt}，Luna 在旁边盯着'},
   '交通':    {kind:'ride',  title:'出发啦！',      text:'Aylin 和 Luna 坐车去 {note}'},
-  '娱乐':    {kind:'carry', prop:'🎮', title:'玩得开心', text:'{amt} 换来的快乐'},
+  '娱乐':    {kind:'carry', prop:'🎮', title:'Luna：又去玩？', text:'{amt}，记下了'},
   '生活用品':{kind:'carry', prop:'🛍️', title:'买好东西啦', text:'{amt}'},
-  '衣服':    {kind:'carry', prop:'👕', title:'新衣服！',  text:'{amt}'},
+  '衣服':    {kind:'carry', prop:'👕', title:'Luna：衣服还不够多？', text:'{amt}'},
   '房租':    {kind:'carry', prop:'🔑', title:'房租交好了', text:'{amt}，这个月住得安心'},
   '水电':    {kind:'carry', prop:'💡', title:'水电付好啦', text:'{amt}'},
   '保险':    {kind:'carry', prop:'🛡️', title:'保险在保护你', text:'{amt}'},
@@ -854,7 +858,8 @@ function actor(opts={}, hold=''){
   pose(a, {}); return a;
 }
 /* 伴侣：笑眯眯，会撒爱心 */
-function partner(opts={}){ return actor(Object.assign({who:'partner', eyes:'happy', mouth:'smile'}, opts)); }
+function partner(opts={}){ return actor(Object.assign({who:'partner', eyes:'dot', mouth:'smile'}, opts)); }
+function mad(x, y){ const t = spawn('floaty', '💢'); at(t, x-40, y); }
 function heart(x, y){ const t = spawn('floaty', '💗'); at(t, x-40, y); }
 function pose(a, opts){ Object.assign(a._o, opts); a.querySelector('.sprite').innerHTML = alienSprite(a._o); }
 function floatText(text, x, y){ const t = spawn('floaty', text); at(t, x-40, y); }
@@ -888,9 +893,10 @@ async function sceneEat(rec, run, W){
   food.style.opacity = 0; pose(a, {mouth:'line', eyes:'closed'});
   for (let i=0; i<6; i++){ await sleep(150); if (!alive(run)) return; pose(a, {mouth: i%2 ? 'line' : 'open'}); if (i%2===0) sfx.nom(); }
   pose(a, {mouth:'pout', eyes:'dot'}); sfx.coin(); floatText('-'+money(rec.amount), x+AW/2, y-4);
-  pose(her, {mouth:'open', arms:'up'}); heart(px+AW/2, y+10);
-  await hop(her, px, y);
-  pose(her, {mouth:'smile', arms:'down'});
+  if (rec.amount > 14){   // 一餐超过每日餐饮额度，Luna 会生气
+    pose(her, {eyes:'stern', mouth:'pout'}); mad(px+AW/2, y+10); sfx.error();
+    $('#sText').textContent = 'Luna：一餐 '+money(rec.amount)+'？超过每天 RM14 了！';
+  } else { pose(her, {mouth:'smile'}); heart(px+AW/2, y+10); await hop(her, px, y); }
 }
 
 /* 交通：车开进站 → Alien 走过去 → 上车 → 窗口露脸 → 喇叭 → 开走 */
@@ -998,8 +1004,9 @@ async function sceneCarry(rec, run, W, prop){
   await Promise.all([walk(a, -AW, x, y, 1000, run), walk(her, -AW-70, px, y, 1000, run)]); if (!alive(run)) return;
   pose(a, {eyes:'up', arms:'up', mouth:'open'}); a.classList.add('lift');
   sfx.coin(); floatText('-'+money(rec.amount), x+AW/2, y-30);
-  pose(her, {mouth:'open'}); heart(px+AW/2, y+10);
-  await hop(a, x, y); pose(a, {mouth:'pout', eyes:'dot'}); pose(her, {mouth:'smile'});
+  if (/🎮|👕/.test(prop) || rec.amount > 50){ pose(her, {eyes:'stern', mouth:'pout'}); mad(px+AW/2, y+10); }
+  else { pose(her, {mouth:'smile'}); heart(px+AW/2, y+10); }
+  await hop(a, x, y); pose(a, {mouth:'pout', eyes:'dot'});
 }
 
 async function runScene(rec){
@@ -1029,11 +1036,53 @@ function showScene(rec){ runScene(rec); }
 function hideScene(){ sceneRun++; $('#scene').classList.remove('show'); }
 $('#scene').onclick = hideScene;
 
-const POKE_LINES =['Aylin：……？','Aylin：别戳我。','Luna：她又在发呆啦 😆','Aylin：嗯。','Luna：再记一笔吧 💗'];
+const POKE_LINES =['Aylin：……？','Aylin：嗯。','Luna：别戳她，让她去记账。','Luna：今天花了多少？老实说。','Aylin：（发呆中）'];
 $('#alienBox').onclick = () => {
   sfx.poke(); alienAct('poke');
   alienSay(POKE_LINES[Math.floor(Math.random()*POKE_LINES.length)], 1800);
 };
+
+/* ===== 原创 8-bit 背景音乐《Aylin 的小宇宙》：方波旋律 + 三角波低音，循环播放 ===== */
+const BGM_LEAD = [
+  76,0,79,0,81,0,79,76,  74,0,76,0,72,0,0,0,
+  76,0,79,0,81,0,84,83,  81,0,0,0,79,0,0,0,
+  72,0,74,0,76,0,79,0,   81,0,79,0,76,0,74,0,
+  72,0,74,0,76,0,74,72,  69,0,0,0,0,0,0,0,
+];
+const BGM_BASS = [45,43,41,40,41,43,45,45];   // 每 8 步换一个低音
+const bgm = {
+  on: store.get('music', true), timer: null, step: 0, next: 0,
+  note(m, t, dur, type, vol){
+    const ac = sfx.ctx; if (!ac) return;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(440*Math.pow(2,(m-69)/12), t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t+dur+0.02);
+  },
+  start(){
+    if (!this.on || this.timer) return;
+    const ac = sfx.ac; if (!ac) return;
+    const s = 60/112/2;                 // 112 BPM，八分音符
+    this.next = ac.currentTime + 0.1;
+    this.timer = setInterval(() => {
+      while (this.next < ac.currentTime + 0.25){
+        const i = this.step, t = this.next;
+        if (BGM_LEAD[i]) this.note(BGM_LEAD[i], t, s*1.6, 'square', 0.025);
+        if (i % 2 === 0) this.note(BGM_BASS[Math.floor(i/8)] + (i%4 ? 12 : 0), t, s*1.8, 'triangle', 0.05);
+        this.next += s; this.step = (this.step + 1) % BGM_LEAD.length;
+      }
+    }, 60);
+  },
+  stop(){ clearInterval(this.timer); this.timer = null; },
+};
+/* 浏览器要求先点一下才能出声：第一次点屏幕就开始播放 */
+document.addEventListener('pointerdown', () => bgm.start());
+document.addEventListener('visibilitychange', () => { if (document.hidden) bgm.stop(); });
+function paintMusBtn(){ $('#musToggle').textContent = '背景音乐：' + (bgm.on ? '开' : '关'); }
+paintMusBtn();
+$('#musToggle').onclick = () => { bgm.on = !bgm.on; store.set('music', bgm.on); paintMusBtn(); bgm.on ? bgm.start() : bgm.stop(); };
 
 /* ===== 页面切换 ===== */
 const PAGES = ['home','add','log','cfg'];
@@ -1193,10 +1242,10 @@ function renderHome(){
 
   // Alien 情绪与对话
   let mood='happy', say='今天也一起记账吧！';
-  if (totalLeft<0){ mood='dizzy'; say='Aylin：超支了，头好晕……'; }
-  else if (totalLeft < totalBudget*0.2){ mood='tense'; say='Aylin：……钱快没了。'; }
-  else if (records.length===0){ say='Luna：嗨！带 Aylin 记第一笔吧 👋'; }
-  else { say='Luna：钱还够用～ Aylin 又在发呆 ✌️'; }
+  if (totalLeft<0){ mood='dizzy'; say='Luna：超支了！这个月不准再乱买！'; }
+  else if (totalLeft < totalBudget*0.2){ mood='tense'; say='Luna：Aylin！钱快没了，别再乱花！'; }
+  else if (records.length===0){ say='Luna：Aylin，花了钱就要记账，知道吗？'; }
+  else { say='Luna：还在预算内。Aylin，继续保持。'; }
   $('#alienBox').innerHTML = alienSVG(mood);
   $('#alienBox').className = 'alien ' + mood; curMood = mood;
   $('#bubble').textContent = say;
