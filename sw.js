@@ -1,6 +1,6 @@
 /* 离线缓存：网页先试网络（拿到最新版），没网就用缓存 */
-const CACHE = 'alien-ledger-v3';
-const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
+const CACHE = 'alien-ledger-v4';
+const FILES = ['./', './index.html', './app.js', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)));
   self.skipWaiting();
