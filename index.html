@@ -364,6 +364,21 @@
   @keyframes bump{50%{transform:scale(1.06)}}
   #saveBtn[disabled]{opacity:.6}
 
+  /* 新功能 */
+  .perday{margin-top:6px;font-size:14px;color:var(--mint)}
+  .perday b{color:var(--neon);font-size:18px}
+  .quick{display:flex;gap:8px;overflow-x:auto;padding:10px 2px 0;scrollbar-width:none}
+  .quick::-webkit-scrollbar,.chips::-webkit-scrollbar{display:none}
+  .quick .pill{white-space:nowrap;margin:0;font-size:13px}
+  .chips{display:flex;gap:6px;overflow-x:auto;margin-top:10px;scrollbar-width:none}
+  .chips .pill{white-space:nowrap;margin:0;font-size:13px;padding:8px 13px}
+  .nudge{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .pd-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(57,255,20,.08)}
+  .pd-row input[type=checkbox]{width:20px;height:20px;margin:0;accent-color:#39ff14}
+  .pd-row .nm{flex:1;font-size:14px}
+  .pd-row input[type=number]{width:110px;margin:0;padding:9px 10px;text-align:right}
+  #payday .scene-card{max-height:86vh;overflow:auto}
+
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important}
   }
@@ -407,6 +422,7 @@
     <div class="muted">本预算月还能花（日常）</div>
     <div class="big" id="remain">RM 0</div>
     <div class="muted" id="monthLabel" style="margin-bottom:4px"></div>
+    <div class="perday" id="perDay"></div>
     <div id="catBars"></div>
   </div>
 
@@ -427,6 +443,11 @@
     <div><div class="muted">今天花了</div><div id="todaySpend" style="font-size:22px;font-weight:800">RM 0</div></div>
     <div style="text-align:right"><div class="muted">待同步</div><div id="pendingCount" style="font-size:22px;font-weight:800">0 笔</div></div>
   </div>
+  <div class="card nudge hidden" id="nudge"></div>
+  <div class="card hidden" id="paydayCard">
+    <div class="row"><div><b>💰 发薪了吗？</b><div class="muted">一键记下工资、房租、保险、水电、电话和还债</div></div>
+    <button class="pill on" id="paydayOpen">发薪分配</button></div>
+  </div>
   <div class="card">
     <div class="muted" style="margin-bottom:6px">最近 5 笔</div>
     <div id="recent5"></div>
@@ -444,6 +465,7 @@
       <button data-type="还债">还债</button>
       <button data-type="转存">转存</button>
     </div>
+    <div class="quick" id="quick"></div>
     <div class="amountbox">
       <div class="cur">RM</div>
       <div class="amount"><span id="amtShow">0.00</span><span class="caret"></span></div>
@@ -469,9 +491,15 @@
 
 <!-- 流水 -->
 <section id="page-log" class="hidden">
-  <h1>流水（这台手机）</h1>
+  <h1>流水</h1>
+  <div class="card">
+    <input id="logSearch" placeholder="🔍 搜索备注、类别、付款方式、金额" autocomplete="off">
+    <div class="chips" id="logCats"></div>
+    <div class="chips" id="logPays"></div>
+  </div>
+  <div class="card" id="logStats"></div>
   <div class="card" id="logList"></div>
-  <p class="muted">完整流水以表格为准。之后会加上从表格读回来的记录。</p>
+  <p class="muted">这里显示这台手机记的账；完整流水以表格为准。</p>
 </section>
 
 <!-- 设定 -->
@@ -499,6 +527,15 @@
     设定
   </button>
 </nav>
+<div class="scene" id="payday">
+  <div class="scene-card" style="text-align:left">
+    <div style="font-size:18px;font-weight:800;color:var(--mint);margin-bottom:6px">💰 发薪分配</div>
+    <div class="muted" style="margin-bottom:8px">照妹妹给你的数字改，不一样的才改；取消勾选的不会记。</div>
+    <div id="paydayList"></div>
+    <button class="btn" id="paydaySave" style="margin-top:12px">全部记下</button>
+    <button class="btn" id="paydayCancel" style="margin-top:8px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none">取消</button>
+  </div>
+</div>
 <div class="scene" id="scene">
   <div class="scene-card">
     <div class="stage" id="stage"></div>
@@ -1061,7 +1098,8 @@ function showScene(rec){ runScene(rec); }
 function hideScene(){ sceneRun++; $('#scene').classList.remove('show'); }
 $('#scene').onclick = hideScene;
 
-const POKE_LINES =['Aylin：……？','Aylin：嗯。','Luna：别戳她，让她去记账。','Luna：今天花了多少？老实说。','Aylin：（发呆中）'];
+const POKE_LINES =['Aylin：……？','Aylin：嗯。','Luna：别戳她，让她去记账。','Luna：今天花了多少？老实说。','Aylin：（发呆中）',
+  'Luna：记账不是为了不花钱，是为了知道钱去哪了。','Luna：一杯咖啡 RM7，一个月就是 RM210。','Luna：想买的东西，先等 24 小时再决定。','Luna：发薪先还债、先存钱，剩下的才是零花。'];
 $('#alienBox').onclick = () => {
   sfx.poke(); alienAct('poke');
   alienSay(POKE_LINES[Math.floor(Math.random()*POKE_LINES.length)], 1800);
@@ -1121,6 +1159,7 @@ function go(page, fromPop){
   document.querySelectorAll('.dock [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go===page));
   if (page==='home') renderHome();
   if (page==='log') renderLog();
+  if (page==='add') renderQuick();
   buzz(5); sfx.pop();
   window.scrollTo({top:0, behavior:'instant'});              // 每次切页都回到最上面
   const sec = $('#page-'+page);
@@ -1258,7 +1297,7 @@ function debtPaid(name){
   return records.filter(r => r.type==='还债' && r.debtTo===name).reduce((s,r)=>s+r.amount,0);
 }
 function streakDays(){
-  const days = new Set(records.map(r=>r.date));
+  const days = new Set(records.map(r=>r.date).concat(store.get('noSpend', [])));
   let d = new Date(); let n=0;
   if (!days.has(today())) d.setDate(d.getDate()-1);   // 今天还没记，从昨天算
   while (true){
@@ -1314,7 +1353,7 @@ function renderHome(){
     return `<div class="boss" data-boss="${name}">
       <div class="boss-icon">${bossSVG(pct, dead)}</div>
       <div style="flex:1">
-        <div class="row"><b>${name}</b><span class="muted">${dead?'已击败 ✓':money(left)}</span></div>
+        <div class="row"><b>${name}</b><span class="muted">${dead?'已击败 ✓':money(left)+' · 预计 '+PLAN_DONE[name]}</span></div>
         <div class="hp ${dead?'dead':''}"><i style="width:0" data-w="${pct}%"></i></div>
       </div></div>`;
   }).join('');
@@ -1338,6 +1377,22 @@ function renderHome(){
   $('#todaySpend').textContent = money(todaySum);
   $('#pendingCount').textContent = queue.length + ' 笔';
   $('#recent5').innerHTML = records.slice(0,5).map(itemHTML).join('') || '<div class="muted">还没有记录</div>';
+  // 今天每天还能花多少（剩余日常预算 ÷ 到下次发薪的天数）
+  const end = new Date(s.getFullYear(), s.getMonth()+1, BUDGET_START_DAY);
+  const daysLeft = Math.max(1, Math.ceil((end - new Date(todayStr+'T00:00:00'))/86400000));
+  $('#perDay').innerHTML = `接下来 ${daysLeft} 天，每天大约还能花 <b>${money(Math.max(0,totalLeft)/daysLeft)}</b>`;
+  // 今天还没记账的提醒 / 零花费日
+  const noSpend = store.get('noSpend', []);
+  const nudge = $('#nudge');
+  if (noSpend.includes(todayStr)){
+    nudge.classList.remove('hidden'); nudge.innerHTML = '<div>🌱 <b>今天是零花费日</b><div class="muted">Luna：很好，就是这样。</div></div>';
+  } else if (!records.some(r => r.date===todayStr)){
+    nudge.classList.remove('hidden');
+    nudge.innerHTML = '<div><b>今天还没记账</b><div class="muted">没花钱也可以按一下，连续天数不会断</div></div><button class="pill on" id="noSpendBtn">今天没花钱</button>';
+    $('#noSpendBtn').onclick = () => { store.set('noSpend', noSpend.concat(todayStr)); sfx.success(); buzz(15); renderHome(); toast('🌱 零花费日 +1'); };
+  } else nudge.classList.add('hidden');
+  // 这个预算月还没记工资 → 显示发薪分配
+  $('#paydayCard').classList.toggle('hidden', records.some(r => r.category==='工资' && inBudgetMonth(r.date)));
   growBars();
 }
 function itemHTML(r){
@@ -1347,9 +1402,87 @@ function itemHTML(r){
     <div class="tag">${r.date} · ${r.pay}${r.note?' · '+r.note:''}</div></div>
     <div style="font-weight:800">${sign}${money(r.amount)}</div></div>`;
 }
+/* 流水：搜索 + 类别 / 付款方式筛选 + 本月分类统计 */
+let logCat = '全部', logPay = '全部';
 function renderLog(){
-  $('#logList').innerHTML = records.map(itemHTML).join('') || '<div class="muted">还没有记录</div>';
+  const cats = ['全部', ...new Set(records.map(r => r.category))];
+  const pays = ['全部', ...PAYS];
+  $('#logCats').innerHTML = cats.map(c => `<span class="pill ${c===logCat?'on':''}" data-c="${c}">${c}</span>`).join('');
+  $('#logPays').innerHTML = pays.map(c => `<span class="pill ${c===logPay?'on':''}" data-p="${c}">${c}</span>`).join('');
+  const q = ($('#logSearch').value||'').trim().toLowerCase();
+  const list = records.filter(r =>
+    (logCat==='全部' || r.category===logCat) && (logPay==='全部' || r.pay===logPay) &&
+    (!q || [r.note, r.category, r.pay, r.debtTo, String(r.amount), r.date].join(' ').toLowerCase().includes(q)));
+  $('#logList').innerHTML = list.map(itemHTML).join('') || '<div class="muted">没有找到记录</div>';
+  // 本预算月各类别花了多少
+  const sums = {};
+  records.filter(r => r.type==='支出' && inBudgetMonth(r.date)).forEach(r => { sums[r.category] = (sums[r.category]||0) + r.amount; });
+  const tot = Object.values(sums).reduce((a,b)=>a+b, 0);
+  const rows = Object.entries(sums).sort((a,b)=>b[1]-a[1]);
+  $('#logStats').innerHTML = '<div class="muted" style="margin-bottom:4px">本预算月支出分布</div>' + (rows.length ? rows.map(([c,v]) =>
+    `<div style="margin-top:10px"><div class="row"><span>${c}</span><span class="muted">${money(v)} · ${Math.round(v/tot*100)}%</span></div>
+     <div class="bar"><i style="width:0" data-w="${v/tot*100}%"></i></div></div>`).join('') : '<div class="muted">这个月还没有支出</div>');
+  growBars();
 }
+$('#logSearch').addEventListener('input', renderLog);
+$('#logCats').onclick = e => { const c = e.target.dataset.c; if (c){ logCat = c; sfx.tick(); renderLog(); } };
+$('#logPays').onclick = e => { const c = e.target.dataset.p; if (c){ logPay = c; sfx.tick(); renderLog(); } };
+
+/* 常用快捷：最常记的 4 种，点一下就填好 */
+function renderQuick(){
+  const cnt = {};
+  records.filter(r => r.type==='支出' && r.note!=='发薪分配').forEach(r => {
+    const k = [r.category, r.amount, r.pay, r.note].join('|'); cnt[k] = (cnt[k]||0) + 1;
+  });
+  const top = Object.entries(cnt).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k]) => k.split('|'));
+  $('#quick').innerHTML = top.map(([c,a,p,n], i) =>
+    `<span class="pill" data-i="${i}">⚡ ${n || c} ${money(+a)}</span>`).join('');
+  $('#quick').onclick = e => {
+    const el = e.target.closest('[data-i]'); if (!el) return;
+    const [c,a,p,n] = top[+el.dataset.i];
+    state.type='支出'; state.cat=c; state.amount=String(+a); state.pay=p; $('#note').value=n;
+    sfx.pop(); buzz(8); buildPills();
+  };
+}
+
+/* 发薪分配：照计划预先填好，一次记完 */
+const PLAN_DONE = { Brother:'2028-10', Church:'2027-03', Stewart:'2027-10' };
+function paydayLines(){
+  const left = n => Math.max(0, DEBT_START[n] - debtPaid(n));
+  const small = left('Church')>0 ? 'Church' : left('Stewart')>0 ? 'Stewart' : 'Brother';
+  return [
+    {type:'收入', cat:'工资',     amt:2620, label:'工资（到手）'},
+    {type:'支出', cat:'房租',     amt:500,  label:'房租'},
+    {type:'支出', cat:'保险',     amt:255,  label:'保险 Prudential'},
+    {type:'支出', cat:'水电',     amt:150,  label:'水电（看账单改）'},
+    {type:'支出', cat:'电话网络', amt:30,   label:'电话'},
+    {type:'还债', cat:'还债',     amt:500,  label:'还 Brother', debt:'Brother'},
+    {type:'还债', cat:'还债',     amt:Math.min(500, left(small) || 500), label:'还 '+small, debt:small},
+  ];
+}
+$('#paydayOpen').onclick = () => {
+  $('#paydayList').innerHTML = paydayLines().map((l,i) =>
+    `<div class="pd-row"><input type="checkbox" checked data-i="${i}"><span class="nm">${l.label}</span>
+     <input type="number" inputmode="decimal" step="0.01" value="${l.amt}" data-a="${i}"></div>`).join('');
+  $('#payday').classList.add('show'); sfx.pop();
+};
+$('#paydayCancel').onclick = () => $('#payday').classList.remove('show');
+$('#paydaySave').onclick = () => {
+  const lines = paydayLines(); let n = 0, income = null;
+  lines.forEach((l,i) => {
+    if (!document.querySelector(`#paydayList [data-i="${i}"]`).checked) return;
+    const amt = parseFloat(document.querySelector(`#paydayList [data-a="${i}"]`).value);
+    if (!amt || amt<=0) return;
+    const rec = { id: Date.now().toString(36)+i+Math.random().toString(36).slice(2,5), date: today(),
+      type:l.type, category:l.cat, amount:amt, pay:'HLB', debtTo:l.debt||'', note:'发薪分配', by:'我', receipt:'' };
+    records.unshift(rec); queue.push(rec.id); n++;
+    if (l.type==='收入') income = rec;
+  });
+  store.set('records', records); store.set('queue', queue);
+  $('#payday').classList.remove('show');
+  toast(`✓ 已记下 ${n} 笔`); flush(); go('home');
+  if (income) setTimeout(() => showScene(income), 120);
+};
 
 /* ===== 上传到表格（离线排队，有网再传）===== */
 let flushing = false;
@@ -1404,7 +1537,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 
 /* ===== 启动 ===== */
 showSetup(needSetup());
-if (!needSetup()) { buildPills(); go('home'); flush(); }
+if (!needSetup()) { buildPills(); go('home'); flush(); if (location.hash==='#add') go('add'); }   // 长按图标的“记一笔”快捷方式
 </script>
 </body>
 </html>
