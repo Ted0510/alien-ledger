@@ -466,6 +466,7 @@
       <button data-type="转存">转存</button>
     </div>
     <div class="quick" id="quick"></div>
+    <div style="display:flex;justify-content:flex-end;margin:6px 0 0"><button class="pill on" id="scanBtn">📷 扫收据</button><input type="file" id="scanFile" accept="image/*" capture="environment" hidden></div>
     <div class="amountbox">
       <div class="cur">RM</div>
       <div class="amount"><span id="amtShow">0.00</span><span class="caret"></span></div>
@@ -527,6 +528,18 @@
     设定
   </button>
 </nav>
+<div class="scene" id="editor">
+  <div class="scene-card" style="text-align:left">
+    <div style="font-size:18px;font-weight:800;color:var(--mint);margin-bottom:6px">✏️ 修改这一笔</div>
+    <label>金额 (RM)</label><input id="edAmt" inputmode="decimal">
+    <label>类别</label><input id="edCat">
+    <label>备注</label><input id="edNote">
+    <div class="muted" id="edLock" style="margin-top:8px"></div>
+    <button class="btn" id="edSave" style="margin-top:12px">保存修改</button>
+    <button class="btn" id="edVoid" style="margin-top:8px;background:transparent;color:var(--bad);border:1px solid var(--bad);box-shadow:none">作废（删除）</button>
+    <button class="btn" id="edCancel" style="margin-top:8px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none">取消</button>
+  </div>
+</div>
 <div class="scene" id="payday">
   <div class="scene-card" style="text-align:left">
     <div style="font-size:18px;font-weight:800;color:var(--mint);margin-bottom:6px">💰 发薪分配</div>
@@ -1158,7 +1171,7 @@ function go(page, fromPop){
   PAGES.forEach(p => { const el=$('#page-'+p); if(el) el.classList.toggle('hidden', p!==page); });
   document.querySelectorAll('.dock [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go===page));
   if (page==='home') renderHome();
-  if (page==='log') renderLog();
+  if (page==='log'){ renderLog(); pull(); }
   if (page==='add') renderQuick();
   buzz(5); sfx.pop();
   window.scrollTo({top:0, behavior:'instant'});              // 每次切页都回到最上面
@@ -1264,11 +1277,11 @@ $('#saveBtn').onclick = () => {
     type: state.type, category: state.cat, amount,
     pay: state.pay,
     debtTo: state.type==='还债' ? state.debt : '',
-    note: $('#note').value.trim(), by: '我', receipt: ''
+    note: $('#note').value.trim(), by: '我', receipt: (window.pendingReceipt||'')
   };
   $('#saveBtn').disabled = true; setTimeout(() => { $('#saveBtn').disabled = false; }, 800);
   dateTouched = false;
-  records.unshift(rec); store.set('records', records);
+  window.pendingReceipt=''; records.unshift(rec); store.set('records', records);
   queue.push(rec.id); store.set('queue', queue);
   const xpGain = 10;
   state.amount=''; $('#note').value='';
@@ -1398,7 +1411,7 @@ function renderHome(){
 function itemHTML(r){
   const sign = r.type==='收入' ? '+' : '-';
   const debt = r.debtTo ? ` · ${r.debtTo}` : '';
-  return `<div class="item"><div><div>${r.category}${debt}</div>
+  return `<div class="item" data-id="${r.id}"><div><div>${r.category}${debt}</div>
     <div class="tag">${r.date} · ${r.pay}${r.note?' · '+r.note:''}</div></div>
     <div style="font-weight:800">${sign}${money(r.amount)}</div></div>`;
 }
@@ -1444,6 +1457,96 @@ function renderQuick(){
     sfx.pop(); buzz(8); buildPills();
   };
 }
+
+/* ===== 连接新版接收器 ===== */
+async function post(body){
+  const res = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify(Object.assign({pin: cfg.pin}, body))});
+  return res.json();
+}
+/* 从表格读回流水：表格是最终记录，手机上还没上传的保留 */
+async function pull(){
+  if (needSetup() || !navigator.onLine || flushing) return;
+  try{
+    const j = await post({action:'list', limit:500});
+    if (!j.ok) return;
+    const pending = new Set(queue);
+    const local = records.filter(r => pending.has(r.id));
+    const remote = j.rows.filter(x => !x.void).reverse().map(x => ({
+      id:x.id, date:x.date, type:x.type, category:x.category, amount:x.amount, pay:x.pay,
+      debtTo:x.debtTo||'', note:x.note||'', by:x.by||'我', receipt:x.receipt||'', checked:x.checked, void:false }));
+    records = local.concat(remote);
+    store.set('records', records);
+    renderHome(); if (curPage==='log') renderLog();
+  }catch(e){ /* 没网就用手机上的 */ }
+}
+/* 流水点一笔：修改或作废 */
+let editId = null;
+function openEdit(id){
+  const r = records.find(x => x.id===id); if (!r) return;
+  editId = id;
+  $('#edAmt').value = r.amount; $('#edCat').value = r.category; $('#edNote').value = r.note||'';
+  $('#edLock').textContent = r.checked ? '🔒 妹妹已核对，不能修改或作废' : '';
+  $('#edSave').disabled = !!r.checked; $('#edVoid').disabled = !!r.checked;
+  $('#editor').classList.add('show'); sfx.pop(); buzz(6);
+}
+$('#logList').onclick = e => { const it = e.target.closest('[data-id]'); if (it) openEdit(it.dataset.id); };
+$('#edCancel').onclick = () => $('#editor').classList.remove('show');
+$('#edSave').onclick = async () => {
+  const f = {amount: parseFloat($('#edAmt').value), category: $('#edCat').value.trim(), note: $('#edNote').value.trim()};
+  if (!f.amount || f.amount<=0) return toast('金额要大于 0');
+  const r = records.find(x => x.id===editId); if (!r) return;
+  if (!queue.includes(editId)){
+    try{ const j = await post({action:'update', id:editId, fields:f}); if (!j.ok) return toast(j.error); }
+    catch(e){ return toast('网络不通，稍后再试'); }
+  }
+  Object.assign(r, f); store.set('records', records);
+  $('#editor').classList.remove('show'); toast('✓ 已修改'); sfx.success(); renderLog(); renderHome();
+};
+$('#edVoid').onclick = async () => {
+  if (!confirm('作废这一笔？表格里会保留并划线，妹妹看得到。')) return;
+  if (queue.includes(editId)){ queue = queue.filter(x => x!==editId); store.set('queue', queue); }
+  else {
+    try{ const j = await post({action:'void', id:editId}); if (!j.ok) return toast(j.error); }
+    catch(e){ return toast('网络不通，稍后再试'); }
+  }
+  records = records.filter(x => x.id!==editId); store.set('records', records);
+  $('#editor').classList.remove('show'); toast('已作废'); sfx.error(); renderLog(); renderHome();
+};
+
+/* 拍照扫收据：照片缩小后交给表格处理，结果填进记一笔，你确认再保存 */
+function shrinkImg(file){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 1280/Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src); res(c.toDataURL('image/jpeg', 0.8).split(',')[1]);
+    };
+    img.onerror = rej; img.src = URL.createObjectURL(file);
+  });
+}
+$('#scanBtn').onclick = () => $('#scanFile').click();
+$('#scanFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  toast('📷 正在读收据…');
+  try{
+    const b64 = await shrinkImg(f);
+    const j = await post({action:'scan', image:b64, mime:'image/jpeg'});
+    if (!j.ok) { toast(j.error); return; }
+    const x = j.result || {};
+    window.pendingReceipt = j.receipt || '';
+    state.type = '支出';
+    state.amount = x.amount ? String(x.amount) : '';
+    state.cat = CATS['支出'].includes(x.category) ? x.category : '其他';
+    buildPills(); go('add');
+    if (x.date) $('#date').value = x.date;
+    $('#note').value = x.merchant || '';
+    toast('请确认金额和类别，再按保存');
+  }catch(err){ toast('扫描失败，可以手动记'); }
+  finally{ e.target.value = ''; }
+};
 
 /* 发薪分配：照计划预先填好，一次记完 */
 const PLAN_DONE = { Brother:'2028-10', Church:'2027-03', Stewart:'2027-10' };
@@ -1537,7 +1640,7 @@ if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catc
 
 /* ===== 启动 ===== */
 showSetup(needSetup());
-if (!needSetup()) { buildPills(); go('home'); flush(); if (location.hash==='#add') go('add'); }   // 长按图标的“记一笔”快捷方式
+if (!needSetup()) { buildPills(); go('home'); flush(); pull(); if (location.hash==='#add') go('add'); }   // 长按图标的“记一笔”快捷方式
 </script>
 </body>
 </html>
