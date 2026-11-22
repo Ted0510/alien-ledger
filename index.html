@@ -1270,7 +1270,9 @@ async function flush(){
     const j = await res.json();
     if (j.ok) { queue = []; store.set('queue', queue); toast('已上传到表格'); }
     else { toast(j.error || '上传失败'); sfx.error(); }
-  }catch(e){ /* 没网或网址错：留在队列，下次再传 */ }
+  }catch(e){ /* 没网或网址错：留在队列，下次再传 */
+    toast(navigator.onLine ? '上传失败：请检查接收器网址' : '没网络，先存在手机里'); sfx.error();
+  }
   finally{ flushing=false; renderHome(); }
 }
 window.addEventListener('online', flush);
