@@ -830,7 +830,7 @@ on('musToggle', 'click', () => { bgm.on = !bgm.on; store.set('music', bgm.on); p
 on('testUpload', 'click', () => flush(true));
 
 /* ===== 校园：两个人自己走动，经过地点冒出小知识 ===== */
-const SPOT_POS = { field:{x:8,y:8}, class:{x:56,y:8}, lib:{x:8,y:40}, shop:{x:56,y:40}, board:{x:32,y:70} };
+const SPOT_POS = { field:{x:8,y:8}, class:{x:56,y:8}, lib:{x:8,y:40}, shop:{x:56,y:40}, board:{x:8,y:72}, office:{x:56,y:72} };
 const SPOT_KEYS = Object.keys(SPOT_POS);
 const SPOT_SAY = {
   field: () => 'Aylin：走走路，心情好，就不想乱花钱。',
@@ -838,6 +838,7 @@ const SPOT_SAY = {
   lib:   () => TIPS[Math.floor(Math.random() * TIPS.length)],
   shop:  () => 'Luna：买之前先等 24 小时。',
   board: () => '布告栏：' + TIPS[Math.floor(Math.random() * TIPS.length)],
+  office: () => 'Luna：设定在这里，网址和 PIN 别外传。',
 };
 let campusT = null;
 function campusInit(){
@@ -870,6 +871,11 @@ function campusStart(){
 }
 function campusStop(){ clearInterval(campusT); campusT = null; }
 on('campusOpen', 'click', () => go('campus'));
+document.querySelectorAll('#campus .bld').forEach(b => b.addEventListener('click', () => {
+  const page = b.dataset.go, anchor = b.dataset.scroll;
+  go(page);
+  if (anchor) setTimeout(() => { const el = $(anchor); if (el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 250);
+}));
 
 /* ===== 启动 ===== */
 function boot(){
@@ -877,7 +883,7 @@ function boot(){
   if (!configured()){ showSetup(true); return; }
   showSetup(false);
   buildPills();
-  go(location.hash === '#add' ? 'add' : 'home');
+  go(location.hash === '#add' ? 'add' : 'campus');
   flush(); pull();
 }
 window.addEventListener('online', () => flush());
