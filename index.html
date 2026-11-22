@@ -1589,21 +1589,23 @@ $('#paydaySave').onclick = () => {
 /* ===== 上传到表格（离线排队，有网再传）===== */
 let flushing = false;
 async function flush(){
+  if (!needSetup() && queue.length && !navigator.onLine) toast('没网络，先存在手机里');
   if (flushing || needSetup() || !queue.length || !navigator.onLine) { renderHome(); return; }
   flushing = true;
+  const ctl = new AbortController(); const timer = setTimeout(() => ctl.abort(), 15000);   // 最多等 15 秒，卡住就放开
   try{
     const rows = records.filter(r => queue.includes(r.id)).reverse();
     const res = await fetch(cfg.url, {
-      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'},
+      method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, signal: ctl.signal,
       body: JSON.stringify({pin: cfg.pin, action:'add', rows})
     });
     const j = await res.json();
     if (j.ok) { queue = []; store.set('queue', queue); toast('已上传到表格'); }
     else { toast(j.error || '上传失败'); sfx.error(); }
-  }catch(e){ /* 没网或网址错：留在队列，下次再传 */
-    toast(navigator.onLine ? '上传失败：请检查接收器网址' : '没网络，先存在手机里'); sfx.error();
+  }catch(e){ /* 没网、超时或网址错：留在队列，下次再传 */
+    toast(e.name==='AbortError' ? '上传超时，稍后自动重试' : (navigator.onLine ? '上传失败：请检查接收器网址' : '没网络，先存在手机里')); sfx.error();
   }
-  finally{ flushing=false; renderHome(); }
+  finally{ clearTimeout(timer); flushing=false; renderHome(); }
 }
 window.addEventListener('online', flush);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) flush(); });
