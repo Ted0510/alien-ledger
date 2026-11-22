@@ -1050,13 +1050,14 @@ const BGM_LEAD = [          // 原创旋律：温柔、慢一点
   76,0,0,72,0,0,74,0,    72,0,0,0,0,0,0,0,
 ];
 const BGM_BASS = [48,43,45,41,48,43,45,41];   // C - G - Am - F，每小节一个和弦
+const BGM_SHIFT = -4;   // 移到 A♭ 大调（F 小调的关系大调），和 Tilt 同一个调性家族
 const BGM_ARP = [[60,64,67,72],[55,59,62,67],[57,60,64,69],[53,57,60,65]];
 const bgm = {
   on: store.get('music', true), timer: null, step: 0, next: 0,
   note(m, t, dur, type, vol){
     const ac = sfx.ctx; if (!ac) return;
     const o = ac.createOscillator(), g = ac.createGain();
-    o.type = type; o.frequency.setValueAtTime(440*Math.pow(2,(m-69)/12), t);
+    o.type = type; o.frequency.setValueAtTime(440*Math.pow(2,(m+BGM_SHIFT-69)/12), t);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(vol, t+0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
@@ -1065,7 +1066,7 @@ const bgm = {
   start(){
     if (!this.on || this.timer) return;
     const ac = sfx.ac; if (!ac) return;
-    const s = 60/88/2;                  // 88 BPM，八分音符，慢一点更温柔
+    const s = 60/96/2;                  // 96 BPM，和 Tilt 同样的速度
     this.next = ac.currentTime + 0.1;
     this.timer = setInterval(() => {
       while (this.next < ac.currentTime + 0.25){
