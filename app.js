@@ -649,6 +649,27 @@ on('alienBox', 'click', () => {
   alienSay(L[Math.floor(Math.random() * L.length)], 1800);
 });
 
+/* ===== 小知识（理财 + 生活习惯各一半，每天换一句）===== */
+const TIPS = [
+  '理财：发薪先把还债和储蓄留出来，剩下的才是生活费。',
+  '习惯：买之前先等 24 小时，很多冲动消费会自己消失。',
+  '理财：紧急备用金一般建议够 3 到 6 个月的基本开销，先从 1000 开始。',
+  '习惯：每一笔都当下记，比月底回想准得多。',
+  '理财：还债时先还金额小的，很快能看到进度，动力也会更足。',
+  '习惯：一杯饮料每天买，一个月就是一笔不小的钱。',
+  '理财：固定支出（房租、保险、水电）先算好，就不会月底才发现不够。',
+  '习惯：超支不用自责，看看是哪个类别，下个月调整就好。',
+  '理财：只看余额不够，记下每一笔，才知道钱去了哪里。',
+  '习惯：每周花一分钟对账，比月底一次对到崩溃轻松。',
+  '理财：现金、银行卡、TNG 分开记，对账时才不会乱。',
+  '习惯：预算不是限制，是让你知道还能放心花多少。',
+  '理财：“今天没花钱”的日子，也是在帮自己存钱。',
+  '习惯：想买的东西，问自己“这个月真的需要吗？”',
+  '理财：收入有波动时，就用最低的那个数字做预算。',
+  '习惯：花钱开心是好事，但要先知道钱从哪里来。',
+];
+function tipOfDay(){ return TIPS[Math.floor(Date.now() / 86400000) % TIPS.length]; }
+
 function renderHome(){
   if (!$('remain')) return;
   const s = budgetMonthStart();
@@ -674,7 +695,7 @@ function renderHome(){
   if (left < 0){ mood = 'dizzy'; say = 'Aylin：超支了，头好晕……'; }
   else if (left < total * 0.2){ mood = 'tense'; say = 'Luna：快见底了，别再乱花！'; }
   else if (!records.length){ say = 'Luna：嗨！带 Aylin 记第一笔吧 👋'; }
-  else { say = 'Luna：钱还够用～ 继续保持 ✌️'; }
+  else { say = tipOfDay(); }
   if ($('alienBox')){ $('alienBox').innerHTML = alienSVG(mood); $('alienBox').className = 'alien ' + mood; }
   curMood = mood;
   if (!sayT && $('bubble')) $('bubble').textContent = say;
