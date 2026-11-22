@@ -1043,13 +1043,14 @@ $('#alienBox').onclick = () => {
 };
 
 /* ===== 原创 8-bit 背景音乐《Aylin 的小宇宙》：方波旋律 + 三角波低音，循环播放 ===== */
-const BGM_LEAD = [
-  76,0,79,0,81,0,79,76,  74,0,76,0,72,0,0,0,
-  76,0,79,0,81,0,84,83,  81,0,0,0,79,0,0,0,
-  72,0,74,0,76,0,79,0,   81,0,79,0,76,0,74,0,
-  72,0,74,0,76,0,74,72,  69,0,0,0,0,0,0,0,
+const BGM_LEAD = [          // 原创旋律：温柔、慢一点
+  76,0,0,79,0,0,76,74,   74,0,0,0,71,0,74,0,
+  72,0,0,76,0,0,72,69,   69,0,0,0,0,0,67,69,
+  72,0,0,76,0,79,0,0,    81,0,79,0,76,0,74,0,
+  76,0,0,72,0,0,74,0,    72,0,0,0,0,0,0,0,
 ];
-const BGM_BASS = [45,43,41,40,41,43,45,45];   // 每 8 步换一个低音
+const BGM_BASS = [48,43,45,41,48,43,45,41];   // C - G - Am - F，每小节一个和弦
+const BGM_ARP = [[60,64,67,72],[55,59,62,67],[57,60,64,69],[53,57,60,65]];
 const bgm = {
   on: store.get('music', true), timer: null, step: 0, next: 0,
   note(m, t, dur, type, vol){
@@ -1064,13 +1065,15 @@ const bgm = {
   start(){
     if (!this.on || this.timer) return;
     const ac = sfx.ac; if (!ac) return;
-    const s = 60/112/2;                 // 112 BPM，八分音符
+    const s = 60/88/2;                  // 88 BPM，八分音符，慢一点更温柔
     this.next = ac.currentTime + 0.1;
     this.timer = setInterval(() => {
       while (this.next < ac.currentTime + 0.25){
         const i = this.step, t = this.next;
-        if (BGM_LEAD[i]) this.note(BGM_LEAD[i], t, s*1.6, 'square', 0.025);
-        if (i % 2 === 0) this.note(BGM_BASS[Math.floor(i/8)] + (i%4 ? 12 : 0), t, s*1.8, 'triangle', 0.05);
+        const bar = Math.floor(i/8);
+        if (BGM_LEAD[i]) this.note(BGM_LEAD[i], t, s*2.4, 'square', 0.02);
+        this.note(BGM_ARP[bar % 4][i % 4], t, s*0.9, 'triangle', 0.018);      // 分解和弦
+        if (i % 4 === 0) this.note(BGM_BASS[bar], t, s*3.6, 'triangle', 0.05);
         this.next += s; this.step = (this.step + 1) % BGM_LEAD.length;
       }
     }, 60);
