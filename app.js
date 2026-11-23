@@ -440,6 +440,7 @@ async function pull(){
 const PAGES = ['home', 'add', 'log', 'cfg'];
 function go(page){
   curPage = page;
+  if (fanOpen) setFan(false);
   PAGES.forEach(p => { const el = $('page-' + p); if (el) el.classList.toggle('hidden', p !== page); });
   document.querySelectorAll('#dock [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === page));
   if (page === 'add' && !dateTouched && $('date')) $('date').value = today();
@@ -1071,6 +1072,36 @@ on('hud', 'click', () => {
   setTimeout(() => { const q = $('questCard'); if (q) q.scrollIntoView({ behavior:'smooth', block:'start' }); }, 250);
 });
 
+/* 游戏快捷栏：每格的角标、进度条、冷却 */
+const fmtK = v => v >= 1000 ? (v / 1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(Math.round(v));
+function renderHotbar(left, daysLeft){
+  const set = (id, v) => { const el = $(id); if (el) el.textContent = v; };
+  const width = (id, pct) => { const el = $(id); if (el) el.style.width = Math.max(0, Math.min(100, pct)) + '%'; };
+  const todaySpent = todayRecs().filter(r => r.type === '支出').reduce((a, r) => a + r.amount, 0);
+  set('hbToday', todaySpent ? 'RM' + fmtK(todaySpent) : '');
+  const claim = store.get('questClaim', { date:'', ids:[] });
+  const done = claim.date === today() ? Math.min(3, claim.ids.length) : 0;
+  set('hbQuest', done + '/3'); width('hbQuestBar', done / 3 * 100);
+  const alive = DEBTS.filter(n => DEBT_START[n] - debtPaid(n) > 0).sort((a, b) => PLAN_DONE[a].localeCompare(PLAN_DONE[b]));
+  if (alive.length){ const n = alive[0], l = DEBT_START[n] - debtPaid(n); set('hbBoss', fmtK(l)); width('hbBossBar', l / DEBT_START[n] * 100); }
+  else { set('hbBoss', '👑'); width('hbBossBar', 0); }
+  set('hbLog', records.length ? String(records.length) : '');
+  const cd = $('hbPayCd');
+  if (records.some(r => r.category === '工资' && inBudgetMonth(r.date))){ set('hbPay', '✓'); if (cd) cd.style.background = 'none'; }
+  else {
+    const now = new Date(today() + 'T00:00:00');
+    let pd = new Date(now.getFullYear(), now.getMonth(), BUDGET_START_DAY);
+    if (now >= pd) pd = new Date(now.getFullYear(), now.getMonth() + 1, BUDGET_START_DAY);
+    const dd = Math.round((pd - now) / 86400000);
+    set('hbPay', dd + 'd');
+    if (cd) cd.style.background = `conic-gradient(rgba(0,0,0,.62) ${Math.min(360, dd / 30 * 360)}deg, transparent 0)`;
+  }
+  set('hbSchool', 'LV' + facLevel());
+  if ($('hbItemIc')) $('hbItemIc').textContent = store.get('item', '') || '🎒';
+  set('hbChapter', 'Ch' + chapterNo());
+  set('hbCfg', !configured() ? '!' : (queue.length ? String(queue.length) : ''));
+}
+
 /* HUD 与能量条 */
 function renderGame(left, total){
   const xp = getXP(), lv = curLevel();
@@ -1084,12 +1115,14 @@ function renderGame(left, total){
   const en = $('energy');
   if (en){ en.classList.toggle('low', ratio < .4 && ratio >= .15); en.classList.toggle('bad', ratio < .15); }
   if ($('energyBar')) $('energyBar').style.width = Math.round(ratio * 100) + '%';
-  renderQuests(); renderChapter(left, total); renderSchool(); renderWardrobe(); renderDex();
+  renderQuests(); renderChapter(left, total); renderSchool(); renderWardrobe(); renderDex(); renderHotbar(left, daysLeft);
 }
 
 /* 首页图标格子 */
-document.querySelectorAll('#grid .gi').forEach(b => b.addEventListener('click', () => {
+document.querySelectorAll('#grid .slot').forEach(b => b.addEventListener('click', () => {
   buzz(6); sfx.tick();
+  b.classList.remove('flash'); void b.offsetWidth; b.classList.add('flash');
+  if (b.dataset.lock) return toast('🔒 到 LV 10 解锁新技能');
   if (b.dataset.go) return go(b.dataset.go);
   if (b.dataset.act === 'payday'){ const p = $('paydayOpen'); if (p) p.click(); return; }
   const el = $(b.dataset.scroll); if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -1282,6 +1315,66 @@ function paintToggles(){
 on('sndToggle', 'click', () => { sfx.on = !sfx.on; store.set('sound', sfx.on); paintToggles(); if (sfx.on) sfx.success(); });
 on('musToggle', 'click', () => { bgm.on = !bgm.on; store.set('music', bgm.on); paintToggles(); bgm.on ? bgm.start() : bgm.stop(); });
 on('testUpload', 'click', () => flush(true));
+
+/* ===== 扇形轮盘导航：点一下展开，或按住往功能滑过去放开 ===== */
+var fanOpen = false;
+function fanLayout(){
+  const items = [...document.querySelectorAll('#fan .fi')], R = 118;
+  items.forEach((b, i) => {
+    const a = Math.PI * (1 - i / (items.length - 1));
+    const x = Math.cos(a) * R, y = -Math.sin(a) * R;
+    b._x = x; b._y = y;   // 记下最终位置，滑动判定用它，不看动画中的位置
+    b.style.transform = fanOpen ? `translate(${x}px,${y}px)` : 'translate(0,0) scale(.3)';
+    b.style.transitionDelay = fanOpen ? (i * 25) + 'ms' : '0ms';
+  });
+}
+function paintHub(){ if ($('hubFace')) $('hubFace').innerHTML = alienSprite(fanOpen ? { eyes:'up', mouth:'open' } : { eyes:'dot', mouth:'smile' }); }
+function setFan(o){
+  fanOpen = o;
+  ['fan', 'fanBg', 'hub'].forEach(id => { const el = $(id); if (el) el.classList.toggle('open', o); });
+  fanLayout(); paintHub();
+  if (o){ sfx.pop(); buzz(8); }
+}
+function fanAct(b){
+  setFan(false); sfx.tick(); buzz(10);
+  if (b.dataset.go) return go(b.dataset.go);
+  if (b.dataset.scroll){ go('home'); setTimeout(() => { const el = $(b.dataset.scroll); if (el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 250); }
+}
+(function(){
+  const hub = $('hub'); if (!hub) return;
+  let pressAt = 0, wasOpen = false, dragging = false, hot = null;
+  const findHot = (x, y) => {
+    let best = null, bd = 50;
+    const f = $('fan').getBoundingClientRect();   // 扇形的圆心
+    document.querySelectorAll('#fan .fi').forEach(b => {
+      const d = Math.hypot(x - (f.left + (b._x || 0)), y - (f.top + (b._y || 0)));
+      if (d < bd){ bd = d; best = b; }
+    });
+    return best;
+  };
+  hub.addEventListener('pointerdown', e => {
+    e.preventDefault(); pressAt = Date.now(); wasOpen = fanOpen; dragging = true;
+    try{ hub.setPointerCapture(e.pointerId); }catch(_){}
+    if (!fanOpen) setFan(true);
+  });
+  hub.addEventListener('pointermove', e => {
+    if (!dragging || !fanOpen) return;
+    const b = findHot(e.clientX, e.clientY);
+    if (b !== hot){ if (hot) hot.classList.remove('hot'); hot = b; if (hot){ hot.classList.add('hot'); buzz(4); sfx.tick(); } }
+  });
+  const end = () => {
+    if (!dragging) return; dragging = false;
+    const held = Date.now() - pressAt;
+    if (hot){ const b = hot; hot.classList.remove('hot'); hot = null; return fanAct(b); }
+    if (wasOpen && held < 350) setFan(false);      // 展开时再点一下：收起
+    else if (!wasOpen && held >= 350) setFan(false); // 按住但没滑到功能：收起
+  };
+  hub.addEventListener('pointerup', end);
+  hub.addEventListener('pointercancel', end);
+  on('fan', 'click', e => { const b = e.target.closest('.fi'); if (b) fanAct(b); });
+  on('fanBg', 'click', () => setFan(false));
+  setFan(false);
+})();
 
 /* ===== 启动 ===== */
 function boot(){

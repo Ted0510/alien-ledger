@@ -448,6 +448,64 @@
   .wiz-row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
   .wiz-row .pill{margin:0}
 
+  /* 便当格 */
+  .bento{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));grid-auto-rows:84px;gap:10px;margin-bottom:14px}
+  .bt{min-width:0;border-radius:20px;border:1px solid rgba(57,255,20,.18);background:linear-gradient(180deg,rgba(57,255,20,.1),rgba(57,255,20,.02));
+    color:var(--text);font:inherit;text-align:left;padding:10px 12px;display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;
+    transition:transform .08s, box-shadow .2s}
+  .bt:active{transform:scale(.96);box-shadow:0 0 16px rgba(57,255,20,.4)}
+  .bh{font-size:12px;color:var(--mint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bv{font-size:20px;font-weight:800;white-space:nowrap}
+  .bv.sm{font-size:15px}
+  .bs{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brow{display:flex;align-items:center;justify-content:space-between}
+  .bbar{height:7px;border-radius:4px;background:rgba(255,90,90,.15);overflow:hidden}
+  .bbar i{display:block;height:100%;width:0;background:#ff5a5a;transition:width .8s}
+  .bt-hero{background:linear-gradient(160deg,#6dff45,#1fa80a);border-color:transparent;color:#001a00;box-shadow:0 0 24px rgba(57,255,20,.35)}
+  .bt-hero .bh,.bt-hero .bs{color:#063a0c}
+  .bt-hero .bv{font-size:26px;color:#001a00}
+  /* 游戏快捷栏 */
+  .hotbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));column-gap:8px;row-gap:24px;padding-bottom:16px}
+  .slot{position:relative;aspect-ratio:1/1;border-radius:12px;border:2px solid #1f4a28;padding:0;cursor:pointer;color:var(--text);font:inherit;
+    background:linear-gradient(180deg,#16301c,#060c07);display:flex;align-items:center;justify-content:center;
+    box-shadow:inset 0 0 0 2px #000, inset 0 3px 0 rgba(255,255,255,.06), 0 3px 0 #031006;transition:transform .08s, border-color .15s}
+  .slot::before{content:attr(data-n);position:absolute;left:5px;top:4px;font-family:var(--pixel);font-size:7px;color:rgba(182,255,192,.55)}
+  .slot .ic{position:relative;z-index:1;font-size:26px;line-height:1;filter:drop-shadow(0 2px 0 rgba(0,0,0,.6))}
+  .slot em{position:absolute;left:-4px;right:-4px;bottom:-18px;font-style:normal;font-size:10px;color:var(--dim);text-align:center;white-space:nowrap}
+  .slot .bd{position:absolute;z-index:2;right:3px;top:3px;padding:1px 4px;border-radius:6px;background:#000;border:1px solid rgba(57,255,20,.55);
+    font-family:var(--pixel);font-size:7px;line-height:1.5;color:var(--neon)}
+  .slot .bd:empty{display:none}
+  .slot .bd.red{border-color:#ff5a5a;color:#ff8a8a}
+  .slot .sb{position:absolute;z-index:2;left:6px;right:6px;bottom:4px;height:4px;border-radius:2px;background:rgba(57,255,20,.12);overflow:hidden}
+  .slot .sb i{display:block;height:100%;width:0;background:var(--neon);transition:width .8s}
+  .slot .sb.red{background:rgba(255,90,90,.15)} .slot .sb.red i{background:#ff5a5a}
+  .slot .cd{position:absolute;inset:0;border-radius:10px;pointer-events:none;z-index:0}
+  .slot-main{border-color:#39ff14;animation:pulseSlot 2.4s ease-in-out infinite}
+  @keyframes pulseSlot{0%,100%{box-shadow:inset 0 0 0 2px #000,0 0 10px rgba(57,255,20,.45),0 3px 0 #0a5a14} 50%{box-shadow:inset 0 0 0 2px #000,0 0 22px rgba(57,255,20,.85),0 3px 0 #0a5a14}}
+  .slot:active{transform:translateY(2px) scale(.95)}
+  .slot.locked{opacity:.4}
+  .slot.flash{animation:slotFlash .35s}
+  @keyframes slotFlash{0%{background:#39ff14} 100%{background:linear-gradient(180deg,#16301c,#060c07)}}
+
+  /* 扇形轮盘导航 */
+  .fan-dock{position:fixed;left:0;right:0;bottom:0;height:0;z-index:12}
+  .fan-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+  .fan-bg.open{opacity:1;pointer-events:auto}
+  .fan{position:fixed;left:50%;bottom:calc(52px + env(safe-area-inset-bottom));width:0;height:0;z-index:11}
+  .fi{position:absolute;left:-31px;top:-31px;width:62px;height:62px;border-radius:50%;border:1px solid rgba(57,255,20,.35);
+    background:rgba(8,18,10,.96);color:var(--text);font:inherit;font-size:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    opacity:0;pointer-events:none;transform:translate(0,0) scale(.3);transition:transform .25s cubic-bezier(.2,.9,.3,1.25),opacity .18s, box-shadow .15s, background .15s}
+  .fi span{font-size:22px;line-height:1}
+  .fan.open .fi{opacity:1;pointer-events:auto}
+  .fi.on{border-color:var(--neon)}
+  .fi.hot{border-color:var(--neon);background:#123a1a;box-shadow:0 0 18px rgba(57,255,20,.7)}
+  .hub{position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));width:70px;height:70px;margin-left:-35px;border-radius:50%;border:0;padding:0;
+    background:radial-gradient(circle at 32% 26%,#eaffd8,#39ff14 45%,#17900a);box-shadow:0 0 0 5px rgba(0,0,0,.9),0 0 26px rgba(57,255,20,.6);
+    z-index:13;cursor:pointer;touch-action:none;transition:transform .15s}
+  .hub.open{transform:scale(1.08) rotate(-6deg)}
+  .hub-face{position:absolute;inset:7px;border-radius:50%;overflow:hidden;background:#0b1f0e}
+  .hub-face svg{position:absolute;left:50%;top:-1px;width:60px;height:93px;margin-left:-30px}
+
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important}
   }
@@ -496,16 +554,18 @@
   </div>
 
   <div class="card">
-    <div class="grid" id="grid">
-      <button class="gi" data-go="add"><span>➕</span>记一笔</button>
-      <button class="gi" data-go="log"><span>📒</span>流水</button>
-      <button class="gi" data-scroll="questCard"><span>🎯</span>任务</button>
-      <button class="gi" data-scroll="bossCard"><span>⚔️</span>BOSS</button>
-      <button class="gi" data-scroll="chapterCard"><span>🗺️</span>章节</button>
-      <button class="gi" data-scroll="schoolCard"><span>🏫</span>学校</button>
-      <button class="gi" data-scroll="wardrobeCard"><span>🎒</span>道具</button>
-      <button class="gi" data-act="payday"><span>💰</span>发薪</button>
-      <button class="gi" data-go="cfg"><span>⚙️</span>设定</button>
+    <div class="row" style="margin-bottom:10px"><span class="pixel">快捷栏</span><span class="muted">点一下使用</span></div>
+    <div class="hotbar" id="grid">
+      <button class="slot slot-main" data-go="add" data-n="1"><span class="ic">✍️</span><b class="bd" id="hbToday"></b><em>记一笔</em></button>
+      <button class="slot" data-scroll="questCard" data-n="2"><span class="ic">🎯</span><b class="bd" id="hbQuest"></b><i class="sb"><i id="hbQuestBar"></i></i><em>任务</em></button>
+      <button class="slot" data-scroll="bossCard" data-n="3"><span class="ic">⚔️</span><b class="bd red" id="hbBoss"></b><i class="sb red"><i id="hbBossBar"></i></i><em>BOSS</em></button>
+      <button class="slot" data-go="log" data-n="4"><span class="ic">📒</span><b class="bd" id="hbLog"></b><em>流水</em></button>
+      <button class="slot" data-act="payday" data-n="5"><span class="cd" id="hbPayCd"></span><span class="ic">💰</span><b class="bd" id="hbPay"></b><em>发薪</em></button>
+      <button class="slot" data-scroll="schoolCard" data-n="6"><span class="ic">🏫</span><b class="bd" id="hbSchool"></b><em>学校</em></button>
+      <button class="slot" data-scroll="wardrobeCard" data-n="7"><span class="ic" id="hbItemIc">🎒</span><em>道具</em></button>
+      <button class="slot" data-scroll="chapterCard" data-n="8"><span class="ic">🗺️</span><b class="bd" id="hbChapter"></b><em>章节</em></button>
+      <button class="slot" data-go="cfg" data-n="9"><span class="ic">⚙️</span><b class="bd red" id="hbCfg"></b><em>设定</em></button>
+      <button class="slot locked" data-lock="1" data-n="0"><span class="ic">🔒</span><em>LV 10</em></button>
     </div>
   </div>
 
@@ -610,20 +670,16 @@
   </div>
 </section>
 
-<nav class="dock" id="dock">
-  <button data-go="home" class="on" aria-label="首页">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
-    首页
-  </button>
-  <button data-go="log" aria-label="流水">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 6h14M5 12h14M5 18h9"/></svg>
-    流水
-  </button>
-  <button data-go="add" class="fab" aria-label="记一笔">+</button>
-  <button data-go="cfg" aria-label="设定">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.1-1.2l2-1.5-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.7a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.7a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2z"/></svg>
-    设定
-  </button>
+<nav class="fan-dock" id="dock" aria-label="主导航">
+  <div class="fan-bg" id="fanBg"></div>
+  <div class="fan" id="fan">
+    <button class="fi" data-go="home" aria-label="首页"><span>🏠</span>首页</button>
+    <button class="fi" data-go="log" aria-label="流水"><span>📒</span>流水</button>
+    <button class="fi" data-go="add" aria-label="记一笔"><span>✍️</span>记一笔</button>
+    <button class="fi" data-scroll="bossCard" aria-label="BOSS"><span>⚔️</span>BOSS</button>
+    <button class="fi" data-go="cfg" aria-label="设定"><span>⚙️</span>设定</button>
+  </div>
+  <button class="hub" id="hub" aria-label="打开轮盘"><div class="hub-face" id="hubFace"></div></button>
 </nav>
 <div class="sheet" id="wiz">
   <div class="sheet-card">
