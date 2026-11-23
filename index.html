@@ -666,7 +666,7 @@
   <div class="card">
     <button class="btn ghost" id="cfgOpen2" style="background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none">修改网址和 PIN</button>
     <button class="btn ghost" id="musToggle" style="margin-top:12px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none"></button>
-    <div class="muted" style="margin-top:14px;text-align:center">版本 v7</div>
+    <div class="muted" style="margin-top:14px;text-align:center">版本 v8</div>
     <button class="btn ghost" id="sndToggle" style="margin-top:12px;background:transparent;color:var(--neon);border:1px solid var(--neon);box-shadow:none"></button>
   </div>
 </section>
@@ -722,6 +722,35 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script>
+/* 诊断模式：网址加上 ?debug=1 时，把错误和触控记录显示在屏幕上（要在 app.js 之前载入）*/
+(function(){
+  if (!/[?&]debug=1/.test(location.search)) return;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:6px;right:6px;top:6px;z-index:99999;max-height:42vh;overflow:auto;background:rgba(0,0,0,.88);color:#b6ffc0;font:11px/1.4 monospace;padding:8px;border:1px solid #39ff14;border-radius:10px;pointer-events:none;white-space:pre-wrap';
+  const lines = [];
+  window.dbg = msg => { lines.unshift(new Date().toTimeString().slice(0,8) + ' ' + msg); lines.length = Math.min(lines.length, 30); box.textContent = lines.join('\n'); };
+  document.addEventListener('DOMContentLoaded', () => document.body.appendChild(box));
+  dbg('UA: ' + navigator.userAgent);
+  dbg('screen ' + innerWidth + 'x' + innerHeight + ' touch=' + ('ontouchstart' in window) + ' sw=' + ('serviceWorker' in navigator));
+  window.addEventListener('error', e => dbg('❌ ' + e.message + ' @' + (e.filename||'').split('/').pop() + ':' + e.lineno));
+  window.addEventListener('unhandledrejection', e => dbg('❌ promise: ' + (e.reason && e.reason.message || e.reason)));
+  ['touchstart','touchend','click'].forEach(t => document.addEventListener(t, e => {
+    const el = e.target, id = el.id || (el.closest && el.closest('[id]') ? el.closest('[id]').id : '');
+    const p = e.changedTouches ? e.changedTouches[0] : e;
+    dbg(t + ' → <' + el.tagName.toLowerCase() + '> #' + id + ' .' + (el.className && el.className.baseVal === undefined ? el.className : '') + ' @' + Math.round(p.clientX) + ',' + Math.round(p.clientY));
+  }, true));
+  window.addEventListener('load', () => {
+    const hub = document.getElementById('hub');
+    if (!hub){ dbg('⚠️ 找不到圆钮 #hub（可能是旧版页面）'); return; }
+    const r = hub.getBoundingClientRect();
+    dbg('hub @' + Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+    const top = document.elementFromPoint(r.left + r.width/2, r.top + r.height/2);
+    dbg('圆钮中心最上层的元素：<' + (top ? top.tagName.toLowerCase() + '> #' + top.id + ' .' + (typeof top.className === 'string' ? top.className : '') : '无'));
+    dbg('版本 ' + (document.body.innerHTML.match(/版本 v\d+/) || ['?'])[0]);
+  });
+})();
+</script>
 <script src="app.js"></script>
 </body>
 </html>
