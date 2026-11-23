@@ -535,7 +535,7 @@ function saveRecord(){
   };
   records.unshift(rec); queue.push(rec.id);
   store.set('records', records); store.set('queue', queue);
-  comboXP();
+  const extra = comboXP(); xpPop('+' + (10 + extra) + ' XP' + (extra ? '  连击！' : ''));
   state.amount = ''; if ($('note')) $('note').value = '';
   dateTouched = false; if ($('date')) $('date').value = today();
   buildPills(); buzz(18);
@@ -782,6 +782,27 @@ function hiddenBadges(){
   ];
 }
 
+/* 消费图鉴：每个类别记过一次就点亮 */
+const DEX = [['餐饮','🍜'],['交通','🚌'],['生活用品','🛍️'],['衣服','👕'],['娱乐','🎮'],['房租','🔑'],
+  ['水电','💡'],['保险','🛡️'],['电话网络','📱'],['其他','✨'],['工资','💰'],['兼职','🧑‍💻']];
+function renderDex(){
+  const cnt = {}; records.forEach(r => { cnt[r.category] = (cnt[r.category] || 0) + 1; });
+  const lit = DEX.filter(([c]) => cnt[c]).length;
+  if ($('dexSum')) $('dexSum').textContent = `${lit}/${DEX.length}`;
+  if ($('dex')) $('dex').innerHTML = DEX.map(([c, ic]) =>
+    `<div class="dx ${cnt[c] ? '' : 'off'}">${ic}<small>${cnt[c] ? c + ' ×' + cnt[c] : '？？？'}</small></div>`).join('');
+}
+/* 经验浮字：每次得分都看得到 */
+function xpPop(text){
+  const d = document.createElement('div'); d.className = 'xpPop'; d.textContent = text;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 1000);
+}
+/* 点顶部 HUD：直接看今日任务 */
+on('hud', 'click', () => {
+  if (curPage !== 'home') go('home');
+  setTimeout(() => { const q = $('questCard'); if (q) q.scrollIntoView({ behavior:'smooth', block:'start' }); }, 250);
+});
+
 /* HUD 与能量条 */
 function renderGame(left, total){
   const xp = getXP(), lv = curLevel();
@@ -795,7 +816,7 @@ function renderGame(left, total){
   const en = $('energy');
   if (en){ en.classList.toggle('low', ratio < .4 && ratio >= .15); en.classList.toggle('bad', ratio < .15); }
   if ($('energyBar')) $('energyBar').style.width = Math.round(ratio * 100) + '%';
-  renderQuests(); renderChapter(left, total); renderSchool(); renderWardrobe();
+  renderQuests(); renderChapter(left, total); renderSchool(); renderWardrobe(); renderDex();
 }
 
 /* 首页图标格子 */

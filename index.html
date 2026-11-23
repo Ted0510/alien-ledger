@@ -418,6 +418,17 @@
   .wd.lock{filter:grayscale(1);opacity:.4}
   .wd.on{border-color:var(--neon);box-shadow:0 0 14px rgba(57,255,20,.35)}
 
+  /* 手感：经验浮字、图鉴、按压反馈 */
+  .xpPop{position:fixed;left:50%;bottom:112px;transform:translateX(-50%);font-family:var(--pixel);font-size:14px;
+    color:var(--neon);text-shadow:0 0 10px var(--neon);pointer-events:none;z-index:60;animation:xpUp 1s ease-out forwards}
+  @keyframes xpUp{0%{opacity:0;transform:translate(-50%,10px)} 20%{opacity:1} 100%{opacity:0;transform:translate(-50%,-70px)}}
+  .dex{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .dx{border-radius:14px;padding:8px 0;text-align:center;background:rgba(57,255,20,.06);border:1px solid rgba(57,255,20,.15);font-size:20px}
+  .dx small{display:block;font-size:10px;color:var(--dim);margin-top:2px}
+  .dx.off{filter:grayscale(1);opacity:.35}
+  .hud{cursor:pointer}
+  .gi,.pill,.key,.btn,.wd,.dock button{transition-duration:.08s}
+
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important}
   }
@@ -515,6 +526,11 @@
   <div class="card" id="wardrobeCard">
     <div class="row" style="margin-bottom:8px"><span class="pixel">衣柜</span><span class="muted">升级解锁，点一下换上</span></div>
     <div class="wardrobe" id="wardrobe"></div>
+  </div>
+
+  <div class="card" id="dexCard">
+    <div class="row" style="margin-bottom:8px"><span class="pixel">消费图鉴</span><span class="muted" id="dexSum"></span></div>
+    <div class="dex" id="dex"></div>
   </div>
 
   <div class="card">
