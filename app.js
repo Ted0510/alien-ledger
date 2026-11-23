@@ -431,7 +431,7 @@ async function pull(){
       debtTo: x.debtTo || '', note: x.note || '', by: x.by || '我', receipt: x.receipt || '',
       checked: x.checked, void: false,
     }));
-    records = local.concat(remote); store.set('records', records);
+    records = sortRecs(local.concat(remote)); store.set('records', records);
     renderHome(); if (curPage === 'log') renderLog();
   }catch(e){ /* 没网或网址不通：就用手机上的记录 */ }
 }
@@ -928,19 +928,26 @@ function renderHome(){
   const todaySum = records.filter(r => r.type === '支出' && r.date === today()).reduce((a, r) => a + r.amount, 0);
   if ($('todaySpend')) $('todaySpend').textContent = money(todaySum);
   if ($('pendingCount')) $('pendingCount').textContent = queue.length + ' 笔';
-  if ($('recent5')) $('recent5').innerHTML = records.slice(0, 5).map(itemHTML).join('') || '<div class="muted">还没有记录</div>';
+  if ($('recent5')) $('recent5').innerHTML = sortRecs(records).slice(0, 5).map(itemHTML).join('') || '<div class="muted">还没有记录</div>';
   renderGame(left, total);
   growBars();
 }
 
 /* ===== 流水 ===== */
+/* 记账时间：从记录编号里读出（编号开头就是记账那一刻的时间）*/
+function createdAt(r){ const t = parseInt(String(r.id || '').slice(0, 8), 36); return t > 1e12 && t < 4e12 ? t : 0; }
+function timeOf(r){ const t = createdAt(r); if (!t) return ''; const d = new Date(t); return ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+/* 排序：日期新的在上；同一天里，后记的在上 */
+function sortRecs(arr){
+  return arr.slice().sort((a, b) => (b.date || '').localeCompare(a.date || '') || createdAt(b) - createdAt(a));
+}
 function itemHTML(r){
   const sign = r.type === '收入' ? '+' : '-';
   const debt = r.debtTo ? ` · ${r.debtTo}` : '';
   const tags = [r.pay, r.note].filter(Boolean).join(' · ');
   const pend = queue.includes(r.id) ? ' <span class="muted">· 待上传</span>' : '';
   return `<div class="item" data-id="${r.id}"><div><div>${r.category}${debt}</div>
-    <div class="tag">${r.date} · ${tags}${pend}</div></div>
+    <div class="tag">${r.date}${timeOf(r)} · ${tags}${pend}</div></div>
     <div style="font-weight:800">${sign}${money(r.amount)}</div></div>`;
 }
 function renderLog(){
@@ -949,7 +956,7 @@ function renderLog(){
   $('logCats').innerHTML = cats.map(c => `<span class="pill ${c===logCat?'on':''}" data-c="${c}">${c}</span>`).join('');
   $('logPays').innerHTML = ['全部', ...PAYS].map(c => `<span class="pill ${c===logPay?'on':''}" data-p="${c}">${c}</span>`).join('');
   const q = (($('logSearch') && $('logSearch').value) || '').trim().toLowerCase();
-  const list = records.filter(r =>
+  const list = sortRecs(records).filter(r =>
     (logCat === '全部' || r.category === logCat) && (logPay === '全部' || r.pay === logPay) &&
     (!q || [r.note, r.category, r.pay, r.debtTo, String(r.amount), r.date].join(' ').toLowerCase().includes(q)));
   $('logList').innerHTML = list.map(itemHTML).join('') || '<div class="muted">没有找到记录</div>';
