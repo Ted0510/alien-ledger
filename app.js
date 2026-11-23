@@ -302,8 +302,8 @@ setInterval(() => {
   const home = document.querySelector('#page-home');
   if (!box || !home || home.classList.contains('hidden') || typeof curMood==='undefined' || curMood!=='happy') return;
   if (!/^alien (happy)$/.test(box.className)) return;   // 正在做动作时不打扰
-  box.innerHTML = alienSVG('happy', Math.random() < .5 ? 'up' : 'side');
-  setTimeout(() => { if (box.className==='alien happy') box.innerHTML = alienSVG('happy'); }, 1600);
+  box.innerHTML = alienSVG('happy', Math.random() < .5 ? 'up' : 'side') + accHTML();
+  setTimeout(() => { if (box.className==='alien happy') box.innerHTML = alienSVG('happy') + accHTML(); }, 1600);
 }, 6500);
 
 /* 小像素图标（BOSS 用）*/
@@ -444,7 +444,7 @@ function go(page){
   document.querySelectorAll('#dock [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === page));
   if (page === 'add' && !dateTouched && $('date')) $('date').value = today();
   if (page === 'home') renderHome();
-  if (page === 'log'){ renderLog(); pull(); }
+  if (page === 'log'){ store.set('logSeen', today()); renderLog(); pull(); }
   if (page === 'add') renderQuick();
   window.scrollTo(0, 0);
   const sec = $('page-' + page);
@@ -535,6 +535,7 @@ function saveRecord(){
   };
   records.unshift(rec); queue.push(rec.id);
   store.set('records', records); store.set('queue', queue);
+  comboXP();
   state.amount = ''; if ($('note')) $('note').value = '';
   dateTouched = false; if ($('date')) $('date').value = today();
   buildPills(); buzz(18);
@@ -550,7 +551,7 @@ function renderQuick(){
   records.filter(r => r.type === '支出' && r.note !== '发薪分配').forEach(r => {
     const k = [r.category, r.amount, r.pay, r.note].join('|'); cnt[k] = (cnt[k] || 0) + 1;
   });
-  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k]) => k.split('|'));
+  const top = Object.entries(cnt).sort((a, b) => b[1] - a[1]).slice(0, quickSlots()).map(([k]) => k.split('|'));
   el.innerHTML = top.map(([c, a, p, n], i) => `<span class="pill" data-i="${i}">⚡ ${n || c} ${money(+a)}</span>`).join('');
   el.onclick = e => {
     const t = e.target.closest('[data-i]'); if (!t) return;
@@ -649,6 +650,162 @@ on('alienBox', 'click', () => {
   alienSay(L[Math.floor(Math.random() * L.length)], 1800);
 });
 
+/* ===== 游戏系统：经验、每日任务、章节、学校基金、衣柜、隐藏成就 ===== */
+function getXP(){ return records.length * 10 + store.get('bonusXP', 0); }
+function addXP(n){ if (n > 0) store.set('bonusXP', store.get('bonusXP', 0) + Math.round(n)); }
+const todayRecs = () => records.filter(r => r.date === today());
+const sumToday = cat => todayRecs().filter(r => r.type === '支出' && r.category === cat).reduce((a, r) => a + r.amount, 0);
+const dailyToday = () => todayRecs().filter(r => r.type === '支出' && DAILY_CATS.includes(r.category)).reduce((a, r) => a + r.amount, 0);
+const fundTotal = () => records.filter(r => r.type === '转存').reduce((a, r) => a + r.amount, 0);
+const monthSum = type => records.filter(r => r.type === type && inBudgetMonth(r.date)).reduce((a, r) => a + r.amount, 0);
+
+/* 连击：连续记账越多天，每笔经验越多 */
+function comboXP(){
+  const s = streakDays();
+  const extra = s >= 7 ? 3 : s >= 3 ? 1 : 0;
+  addXP(extra);
+  return extra;
+}
+
+/* 每日任务：每天从任务池抽 3 个 */
+const QUEST_POOL = [
+  { id:'log3',  t:'今天记 3 笔',                    ok: () => todayRecs().length >= 3 },
+  { id:'food',  t:'今天餐饮不超过 RM14',            ok: () => todayRecs().length > 0 && sumToday('餐饮') <= 14 },
+  { id:'daily', t:'今天日常支出不超过 RM22.8',      ok: () => todayRecs().length > 0 && dailyToday() <= DAILY_LIMIT },
+  { id:'note',  t:'今天每一笔都写备注',             ok: () => { const r = todayRecs(); return r.length > 0 && r.every(x => x.note); } },
+  { id:'look',  t:'打开流水看一眼',                 ok: () => store.get('logSeen', '') === today() },
+  { id:'zero',  t:'今天零花费（按“今天没花钱”）',  ok: () => store.get('noSpend', []).includes(today()) },
+  { id:'debt',  t:'这个预算月已经还过债',           ok: () => monthSum('还债') > 0 },
+];
+function todaysQuests(){
+  const d = Math.floor(new Date(today() + 'T00:00:00').getTime() / 86400000), n = QUEST_POOL.length, out = [];
+  for (let k = 0; out.length < 3 && k < n * 2; k++){
+    const q = QUEST_POOL[(d * 7 + k * 3) % n];
+    if (!out.includes(q)) out.push(q);
+  }
+  return out;
+}
+function renderQuests(){
+  const qs = todaysQuests();
+  let claim = store.get('questClaim', { date:'', ids:[], bonus:false });
+  if (claim.date !== today()) claim = { date: today(), ids: [], bonus: false };
+  qs.forEach(q => {
+    if (q.ok() && !claim.ids.includes(q.id)){
+      claim.ids.push(q.id); addXP(20);
+      store.set('questCount', store.get('questCount', 0) + 1);
+      toast('🎯 任务完成：' + q.t + '  +20 XP'); sfx.levelup();
+    }
+  });
+  if (!claim.bonus && qs.every(q => claim.ids.includes(q.id))){
+    claim.bonus = true; addXP(30); setTimeout(() => { toast('🏆 今日任务全部完成  +30 XP'); sfx.fanfare(); }, 900);
+  }
+  store.set('questClaim', claim);
+  const done = qs.filter(q => claim.ids.includes(q.id)).length;
+  if ($('questSum')) $('questSum').textContent = `${done}/3`;
+  if ($('hudQuest')) $('hudQuest').textContent = `🎯${done}/3`;
+  if ($('questList')) $('questList').innerHTML = qs.map(q => {
+    const d = claim.ids.includes(q.id);
+    return `<div class="q ${d ? 'done' : ''}"><div class="ck">${d ? '✓' : ''}</div><div class="qt">${q.t}</div><div class="qxp">+20 XP</div></div>`;
+  }).join('') + `<div class="muted" style="margin-top:8px">三个都完成再送 +30 XP</div>`;
+}
+
+/* 章节：每个预算月是一章 */
+const CHAPTERS = ['初到外星学校','小卖部的诱惑','图书馆的秘密','操场上的挑战','布告栏的通知','校长室的考验','期末大作战','暑假存钱计划','新学期的约定','Luna 的生日','月球远足','毕业前夕'];
+function chapterNo(){
+  const s = budgetMonthStart(), base = new Date(2026, 10, BUDGET_START_DAY);
+  return Math.max(1, (s.getFullYear() - base.getFullYear()) * 12 + (s.getMonth() - base.getMonth()) + 1);
+}
+function goalHTML(label, val, target, money_ = true){
+  const pct = Math.max(0, Math.min(100, val / target * 100));
+  const done = val >= target;
+  return `<div class="goal"><div class="row"><span>${done ? '✅' : '◻️'} ${label}</span><span class="muted">${money_ ? money(val) + ' / ' + money(target) : val + ' / ' + target}</span></div>
+    <div class="bar"><i style="width:0" data-w="${pct}%"></i></div></div>`;
+}
+function renderChapter(left, total){
+  const n = chapterNo();
+  if ($('chapterTitle')) $('chapterTitle').textContent = `第 ${n} 章：${CHAPTERS[(n - 1) % CHAPTERS.length]}`;
+  if ($('chapterSub')) $('chapterSub').textContent = '这一章的目标，完成越多，章节评分越高';
+  const spent = total - left;
+  if ($('chapterGoals')) $('chapterGoals').innerHTML =
+    goalHTML('还债 RM1000', monthSum('还债'), 1000) +
+    goalHTML('存进备用金 RM100', monthSum('转存'), 100) +
+    `<div class="goal"><div class="row"><span>${left >= 0 ? '✅' : '❌'} 日常不超支</span><span class="muted">已花 ${money(spent)} / ${money(total)}</span></div>
+     <div class="bar ${left < 0 ? 'bad' : ''}"><i style="width:0" data-w="${Math.min(100, spent / total * 100)}%"></i></div></div>`;
+}
+
+/* 学校基金与设施：基金越多，设施等级越高，各有加成 */
+const FUND_STEPS = [0, 100, 300, 600, 1000];
+function facLevel(){ const f = fundTotal(); let l = 1; FUND_STEPS.forEach((s, i) => { if (f >= s) l = i + 1; }); return l; }
+const quickSlots = () => Math.min(8, 3 + facLevel());
+function renderSchool(){
+  const f = fundTotal(), lv = facLevel(), next = FUND_STEPS[lv];
+  if ($('fundTxt')) $('fundTxt').textContent = money(f);
+  if ($('hudFund')) $('hudFund').textContent = '🏫' + Math.round(f);
+  const FAC = [
+    { ic:'📚', n:'图书馆', eff:`小知识 ${Math.min(TIPS.length, 6 + 2 * lv)} 句` },
+    { ic:'🏪', n:'小卖部', eff:`常用快捷 ${quickSlots()} 格` },
+    { ic:'🏃', n:'操场',   eff:`零花费日 +${10 * lv} XP` },
+  ];
+  if ($('facList')) $('facList').innerHTML = FAC.map(x =>
+    `<div class="fac"><span class="ic">${x.ic}</span><div><b>${x.n}</b><div class="muted">${x.eff}</div></div><span class="lv">LV ${lv}</span></div>`).join('') +
+    `<div class="muted" style="margin-top:8px">${next !== undefined ? `再存 ${money(next - f)} 升到 LV ${lv + 1}` : '设施已满级 ✨'}</div>`;
+}
+
+/* 衣柜：等级解锁配件，戴在 Aylin 身上 */
+const OUTFITS = [
+  { lv:1, ic:'🎀', n:'校服' }, { lv:2, ic:'🎧', n:'耳机' }, { lv:3, ic:'🎒', n:'书包' },
+  { lv:4, ic:'🕶️', n:'墨镜' }, { lv:5, ic:'🛸', n:'飞碟' },
+];
+const curLevel = () => Math.floor(getXP() / 100) + 1;
+const accHTML = () => { const o = store.get('outfit', '🎀'); return o === '🎀' ? '' : `<span class="acc">${o}</span>`; };
+function renderWardrobe(){
+  const lv = curLevel(), cur = store.get('outfit', '🎀');
+  if ($('wardrobe')) $('wardrobe').innerHTML = OUTFITS.map(o =>
+    `<button class="wd ${lv < o.lv ? 'lock' : ''} ${cur === o.ic ? 'on' : ''}" data-o="${o.ic}" data-lv="${o.lv}">${lv < o.lv ? '🔒' : o.ic}<small>${lv < o.lv ? 'LV ' + o.lv : o.n}</small></button>`).join('');
+}
+on('wardrobe', 'click', e => {
+  const b = e.target.closest('[data-o]'); if (!b) return;
+  if (curLevel() < +b.dataset.lv) return toast(`要到 LV ${b.dataset.lv} 才能解锁`);
+  store.set('outfit', b.dataset.o); sfx.pop(); buzz(8); renderHome(); toast('换上了 ' + b.dataset.o);
+});
+
+/* 隐藏成就：没解锁前只显示问号 */
+function hiddenBadges(){
+  const hourOf = id => { const t = parseInt(String(id).slice(0, 8), 36); return t > 1e12 ? new Date(t).getHours() : 12; };
+  return [
+    { ic:'🦉', t:'夜猫子记账', on: records.some(r => hourOf(r.id) < 5), hidden:true },
+    { ic:'🔥', t:'连续 14 天', on: streakDays() >= 14, hidden:true },
+    { ic:'🌱', t:'零花费 3 天', on: store.get('noSpend', []).length >= 3, hidden:true },
+    { ic:'🏦', t:'单月存 RM300', on: monthSum('转存') >= 300, hidden:true },
+    { ic:'💰', t:'用过发薪分配', on: records.some(r => r.note === '发薪分配'), hidden:true },
+    { ic:'🎯', t:'完成 10 个任务', on: store.get('questCount', 0) >= 10, hidden:true },
+  ];
+}
+
+/* HUD 与能量条 */
+function renderGame(left, total){
+  const xp = getXP(), lv = curLevel();
+  if ($('hudLv')) $('hudLv').textContent = 'LV ' + lv;
+  if ($('hudXp')) $('hudXp').style.width = (xp % 100) + '%';
+  if ($('hudStreak')) $('hudStreak').textContent = '🔥' + streakDays();
+  const s = budgetMonthStart(), end = new Date(s.getFullYear(), s.getMonth()+1, BUDGET_START_DAY);
+  const daysLeft = Math.max(1, Math.ceil((end - new Date(today() + 'T00:00:00')) / 86400000));
+  const allow = Math.max(0, left + dailyToday()) / daysLeft;
+  const ratio = allow > 0 ? Math.max(0, 1 - dailyToday() / allow) : 0;
+  const en = $('energy');
+  if (en){ en.classList.toggle('low', ratio < .4 && ratio >= .15); en.classList.toggle('bad', ratio < .15); }
+  if ($('energyBar')) $('energyBar').style.width = Math.round(ratio * 100) + '%';
+  renderQuests(); renderChapter(left, total); renderSchool(); renderWardrobe();
+}
+
+/* 首页图标格子 */
+document.querySelectorAll('#grid .gi').forEach(b => b.addEventListener('click', () => {
+  buzz(6); sfx.tick();
+  if (b.dataset.go) return go(b.dataset.go);
+  if (b.dataset.act === 'payday'){ const p = $('paydayOpen'); if (p) p.click(); return; }
+  const el = $(b.dataset.scroll); if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+}));
+
 /* ===== 小知识（理财 + 生活习惯各一半，每天换一句）===== */
 const TIPS = [
   '理财：发薪先把还债和储蓄留出来，剩下的才是生活费。',
@@ -668,7 +825,7 @@ const TIPS = [
   '理财：收入有波动时，就用最低的那个数字做预算。',
   '习惯：花钱开心是好事，但要先知道钱从哪里来。',
 ];
-function tipOfDay(){ return TIPS[Math.floor(Date.now() / 86400000) % TIPS.length]; }
+function tipOfDay(){ const pool = TIPS.slice(0, Math.min(TIPS.length, 6 + 2 * facLevel())); return pool[Math.floor(Date.now() / 86400000) % pool.length]; }
 
 function renderHome(){
   if (!$('remain')) return;
@@ -696,11 +853,11 @@ function renderHome(){
   else if (left < total * 0.2){ mood = 'tense'; say = 'Luna：快见底了，别再乱花！'; }
   else if (!records.length){ say = 'Luna：嗨！带 Aylin 记第一笔吧 👋'; }
   else { say = tipOfDay(); }
-  if ($('alienBox')){ $('alienBox').innerHTML = alienSVG(mood); $('alienBox').className = 'alien ' + mood; }
+  if ($('alienBox')){ $('alienBox').innerHTML = alienSVG(mood) + accHTML(); $('alienBox').className = 'alien ' + mood; }
   curMood = mood;
   if (!sayT && $('bubble')) $('bubble').textContent = say;
 
-  const xp = records.length * 10, lv = Math.floor(xp / 100) + 1;
+  const xp = getXP(), lv = Math.floor(xp / 100) + 1;
   if ($('lvlTxt')) $('lvlTxt').textContent = 'LV ' + lv;
   if ($('stageTxt')) $('stageTxt').textContent = lv >= 5 ? '飞碟 Alien' : lv >= 3 ? '加触角' : '幼体';
   if ($('xpBar')) $('xpBar').style.width = (xp % 100) + '%';
@@ -725,9 +882,10 @@ function renderHome(){
     { ic:'🏆', t:'Stewart 击败', on: debtPaid('Stewart') >= DEBT_START.Stewart },
     { ic:'⭐', t:'第一笔记录', on: records.length >= 1 },
     { ic:'👑', t:'债务清零', on: DEBTS.every(n => debtPaid(n) >= DEBT_START[n]) },
+    ...hiddenBadges(),
   ];
   if ($('badges')) $('badges').innerHTML = badges.map(b =>
-    `<div class="badge ${b.on?'on':''}"><div class="ic">${b.ic}</div><div class="t">${b.t}</div></div>`).join('');
+    `<div class="badge ${b.on?'on':''}"><div class="ic">${b.hidden && !b.on ? '❓' : b.ic}</div><div class="t">${b.hidden && !b.on ? '???' : b.t}</div></div>`).join('');
 
   const noSpend = store.get('noSpend', []);
   const nudge = $('nudge');
@@ -739,7 +897,7 @@ function renderHome(){
       nudge.classList.remove('hidden');
       nudge.innerHTML = '<div><b>今天还没记账</b><div class="muted">没花钱也可以按一下，连续天数不会断</div></div><button class="pill on" id="noSpendBtn">今天没花钱</button>';
       on('noSpendBtn', 'click', () => {
-        store.set('noSpend', noSpend.concat(today())); sfx.success(); buzz(15); renderHome(); toast('🌱 零花费日 +1');
+        store.set('noSpend', noSpend.concat(today())); addXP(10 * facLevel()); sfx.success(); buzz(15); renderHome(); toast(`🌱 零花费日  +${10 * facLevel()} XP`);
       });
     } else nudge.classList.add('hidden');
   }
@@ -750,6 +908,7 @@ function renderHome(){
   if ($('todaySpend')) $('todaySpend').textContent = money(todaySum);
   if ($('pendingCount')) $('pendingCount').textContent = queue.length + ' 笔';
   if ($('recent5')) $('recent5').innerHTML = records.slice(0, 5).map(itemHTML).join('') || '<div class="muted">还没有记录</div>';
+  renderGame(left, total);
   growBars();
 }
 

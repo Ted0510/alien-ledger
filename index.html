@@ -379,12 +379,59 @@
   .pd-row input[type=number]{width:110px;margin:0;padding:9px 10px;text-align:right}
   #payday .scene-card{max-height:86vh;overflow:auto}
 
+  /* ===== 游戏化外壳 ===== */
+  #screenFx{position:fixed;inset:0;pointer-events:none;z-index:40;opacity:.35;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.25) 0 1px,transparent 1px 3px)}
+  #screenFx::after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 62%,rgba(0,0,0,.5))}
+  .hud{position:sticky;top:0;z-index:9;display:flex;align-items:center;gap:10px;margin:-14px -16px 12px;padding:10px 14px;
+    background:rgba(4,10,6,.88);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    border-bottom:1px solid rgba(57,255,20,.3);box-shadow:0 4px 20px rgba(0,0,0,.5);
+    font-family:var(--pixel);font-size:10px;color:var(--mint);white-space:nowrap}
+  .hud-lv{color:var(--neon)}
+  .hud-xp{flex:1;min-width:40px;height:7px;border-radius:4px;background:rgba(57,255,20,.12);overflow:hidden}
+  .hud-xp i{display:block;height:100%;width:0;background:var(--neon);box-shadow:0 0 8px var(--neon);transition:width .6s}
+  .me-col{display:flex;flex-direction:column;align-items:center;gap:6px}
+  .energy{width:118px;height:9px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;border:1px solid rgba(57,255,20,.3)}
+  .energy i{display:block;height:100%;width:0;background:linear-gradient(90deg,#39ff14,#b6ffc0);transition:width .8s}
+  .energy.low i{background:linear-gradient(90deg,#ffb020,#ffd23f)} .energy.bad i{background:#ff5a5a}
+  .alien{position:relative}
+  .acc{position:absolute;left:4px;top:-2px;font-size:22px;filter:drop-shadow(0 0 4px #000);pointer-events:none}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .gi{aspect-ratio:1/1;border-radius:22px;border:1px solid rgba(57,255,20,.2);
+    background:linear-gradient(180deg,rgba(57,255,20,.12),rgba(57,255,20,.03));color:var(--text);font:inherit;font-size:13px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:transform .12s, box-shadow .2s}
+  .gi span{font-size:30px;line-height:1}
+  .gi:active{transform:scale(.92);box-shadow:0 0 18px rgba(57,255,20,.4)}
+  .q{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px dashed rgba(57,255,20,.12)}
+  .q:last-child{border-bottom:0}
+  .q .ck{width:24px;height:24px;flex:0 0 auto;border-radius:8px;border:2px solid rgba(57,255,20,.4);display:flex;align-items:center;justify-content:center;font-size:13px}
+  .q.done .ck{background:var(--neon);color:#001a00;border-color:var(--neon)}
+  .q.done .qt{color:var(--dim);text-decoration:line-through}
+  .q .qxp{margin-left:auto;font-size:12px;color:var(--warn);white-space:nowrap}
+  .goal{margin-top:12px}
+  .fac{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px dashed rgba(57,255,20,.12)}
+  .fac:last-child{border-bottom:0}
+  .fac .ic{font-size:26px} .fac .lv{margin-left:auto;font-family:var(--pixel);font-size:10px;color:var(--neon)}
+  .wardrobe{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+  .wd{border-radius:16px;padding:10px 0;text-align:center;background:rgba(57,255,20,.06);border:1px solid rgba(57,255,20,.15);font-size:22px;cursor:pointer;color:var(--text);font-family:inherit}
+  .wd small{display:block;font-size:10px;color:var(--dim);margin-top:2px}
+  .wd.lock{filter:grayscale(1);opacity:.4}
+  .wd.on{border-color:var(--neon);box-shadow:0 0 14px rgba(57,255,20,.35)}
+
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important}
   }
 </style>
 </head>
 <body>
+<div id="screenFx" aria-hidden="true"></div>
+<header class="hud" id="hud">
+  <span class="hud-lv" id="hudLv">LV 1</span>
+  <div class="hud-xp"><i id="hudXp"></i></div>
+  <span id="hudStreak">🔥0</span>
+  <span id="hudFund">🏫0</span>
+  <span id="hudQuest">🎯0/3</span>
+</header>
 
 <!-- 首次设定 -->
 <section id="setup" class="hidden">
@@ -405,7 +452,7 @@
 
   <div class="card">
     <div class="hero">
-      <div id="alienBox" class="alien"></div>
+      <div class="me-col"><div class="energy" id="energy" title="今天的预算能量"><i id="energyBar"></i></div><div id="alienBox" class="alien"></div></div>
       <div style="flex:1">
         <div class="bubble" id="bubble">Luna：今天花了多少？老实记下来。</div>
         <div class="row" style="margin-top:12px">
@@ -419,6 +466,20 @@
   </div>
 
   <div class="card">
+    <div class="grid" id="grid">
+      <button class="gi" data-go="add"><span>➕</span>记一笔</button>
+      <button class="gi" data-go="log"><span>📒</span>流水</button>
+      <button class="gi" data-scroll="questCard"><span>🎯</span>任务</button>
+      <button class="gi" data-scroll="bossCard"><span>⚔️</span>BOSS</button>
+      <button class="gi" data-scroll="chapterCard"><span>🗺️</span>章节</button>
+      <button class="gi" data-scroll="schoolCard"><span>🏫</span>学校</button>
+      <button class="gi" data-scroll="wardrobeCard"><span>👗</span>衣柜</button>
+      <button class="gi" data-act="payday"><span>💰</span>发薪</button>
+      <button class="gi" data-go="cfg"><span>⚙️</span>设定</button>
+    </div>
+  </div>
+
+  <div class="card">
     <div class="muted">本预算月还能花（日常）</div>
     <div class="big" id="remain">RM 0</div>
     <div class="muted" id="monthLabel" style="margin-bottom:4px"></div>
@@ -426,12 +487,34 @@
     <div id="catBars"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="questCard">
+    <div class="row" style="margin-bottom:4px"><span class="pixel">今日任务</span><span class="muted" id="questSum"></span></div>
+    <div id="questList"></div>
+  </div>
+
+  <div class="card" id="chapterCard">
+    <div class="pixel" id="chapterTitle" style="margin-bottom:6px">第 1 章</div>
+    <div class="muted" id="chapterSub"></div>
+    <div id="chapterGoals"></div>
+  </div>
+
+  <div class="card" id="bossCard">
     <div class="row" style="margin-bottom:4px">
       <span class="pixel">BOSS 战</span>
       <span class="muted">每还一笔，血条就少一格</span>
     </div>
     <div id="bosses"></div>
+  </div>
+
+  <div class="card" id="schoolCard">
+    <div class="row"><span class="pixel">学校基金</span><b id="fundTxt" style="color:var(--neon)">RM 0</b></div>
+    <div class="muted" style="margin:4px 0 6px">把钱转存进备用金，基金就增加，设施会跟着升级</div>
+    <div id="facList"></div>
+  </div>
+
+  <div class="card" id="wardrobeCard">
+    <div class="row" style="margin-bottom:8px"><span class="pixel">衣柜</span><span class="muted">升级解锁，点一下换上</span></div>
+    <div class="wardrobe" id="wardrobe"></div>
   </div>
 
   <div class="card">
