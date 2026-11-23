@@ -1342,7 +1342,14 @@ function fanAct(b){
 }
 (function(){
   const hub = $('hub'); if (!hub) return;
-  let pressAt = 0, wasOpen = false, dragging = false, hot = null;
+  /* 点一下：用最普通的 click，所有手机都支持 */
+  let swallowClick = false;
+  hub.addEventListener('click', e => {
+    if (swallowClick){ swallowClick = false; return; }
+    setFan(!fanOpen);
+  });
+  /* 按住滑动：只用触控事件，手指移动超过 12px 才算滑动 */
+  let sx = 0, sy = 0, sliding = false, hot = null;
   const findHot = (x, y) => {
     let best = null, bd = 50;
     const f = $('fan').getBoundingClientRect();   // 扇形的圆心
@@ -1352,25 +1359,24 @@ function fanAct(b){
     });
     return best;
   };
-  hub.addEventListener('pointerdown', e => {
-    e.preventDefault(); pressAt = Date.now(); wasOpen = fanOpen; dragging = true;
-    try{ hub.setPointerCapture(e.pointerId); }catch(_){}
-    if (!fanOpen) setFan(true);
-  });
-  hub.addEventListener('pointermove', e => {
-    if (!dragging || !fanOpen) return;
-    const b = findHot(e.clientX, e.clientY);
+  hub.addEventListener('touchstart', e => {
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; sliding = false; hot = null;
+  }, { passive: true });
+  hub.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (!sliding && Math.hypot(t.clientX - sx, t.clientY - sy) > 12){ sliding = true; if (!fanOpen) setFan(true); }
+    if (!sliding) return;
+    e.preventDefault();
+    const b = findHot(t.clientX, t.clientY);
     if (b !== hot){ if (hot) hot.classList.remove('hot'); hot = b; if (hot){ hot.classList.add('hot'); buzz(4); sfx.tick(); } }
+  }, { passive: false });
+  hub.addEventListener('touchend', () => {
+    if (!sliding) return;                 // 没滑动：交给 click 处理
+    swallowClick = true; setTimeout(() => { swallowClick = false; }, 400);
+    sliding = false;
+    if (hot){ const b = hot; hot.classList.remove('hot'); hot = null; fanAct(b); }
+    else setFan(false);
   });
-  const end = () => {
-    if (!dragging) return; dragging = false;
-    const held = Date.now() - pressAt;
-    if (hot){ const b = hot; hot.classList.remove('hot'); hot = null; return fanAct(b); }
-    if (wasOpen && held < 350) setFan(false);      // 展开时再点一下：收起
-    else if (!wasOpen && held >= 350) setFan(false); // 按住但没滑到功能：收起
-  };
-  hub.addEventListener('pointerup', end);
-  hub.addEventListener('pointercancel', end);
   on('fan', 'click', e => { const b = e.target.closest('.fi'); if (b) fanAct(b); });
   on('fanBg', 'click', () => setFan(false));
   setFan(false);
