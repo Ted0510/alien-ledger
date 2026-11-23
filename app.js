@@ -475,76 +475,132 @@ on('cfgSave', 'click', () => {
   toast('✓ 设定已保存');
 });
 
-/* ===== 记一笔 ===== */
-const TYPES = ['支出', '收入', '还债', '转存'];
-function buildPills(){
-  const list = state.type === '收入' ? CATS['收入'] : CATS['支出'];
-  if ($('catPills')) $('catPills').innerHTML = list.map(c =>
-    `<span class="pill ${c===state.cat?'on':''}" data-cat="${c}">${c}</span>`).join('');
-  if ($('debtBox')) $('debtBox').classList.toggle('hidden', state.type !== '还债');
-  if ($('debtPills')) $('debtPills').innerHTML = DEBTS.map(d =>
-    `<span class="pill ${d===state.debt?'on':''}" data-debt="${d}">${d}</span>`).join('');
-  if ($('payPills')) $('payPills').innerHTML = PAYS.map(p =>
-    `<span class="pill ${p===state.pay?'on':''}" data-pay="${p}">${p}</span>`).join('');
-  if ($('amtShow')) $('amtShow').textContent = state.amount || '0.00';
-  const i = TYPES.indexOf(state.type);
-  const thumb = document.querySelector('#typeSeg .thumb');
-  if (thumb) thumb.style.left = `calc(${i*25}% + 4px)`;
-  document.querySelectorAll('#typeSeg [data-type]').forEach((b, j) => b.classList.toggle('on', j === i));
-}
-document.querySelectorAll('#typeSeg [data-type]').forEach(b => b.addEventListener('click', () => {
-  state.type = b.dataset.type; buzz();
-  state.cat = state.type === '收入' ? '工资' : state.type === '还债' ? '还债' : state.type === '转存' ? '备用金' : '餐饮';
-  buildPills();
-}));
-on('catPills', 'click', e => { const c = e.target.dataset.cat; if (c){ state.cat = c; buzz(); buildPills(); } });
-on('debtPills', 'click', e => { const d = e.target.dataset.debt; if (d){ state.debt = d; buzz(); buildPills(); } });
-on('payPills', 'click', e => { const p = e.target.dataset.pay; if (p){ state.pay = p; store.set('lastPay', p); buzz(); buildPills(); } });
+/* ===== 记一笔（收银机式输入 + 一步一步弹出）===== */
+const TYPE_OPTS = [['支出','💸'],['收入','💰'],['还债','⚔️'],['转存','🏦']];
+const CAT_ICON = { '餐饮':'🍜','交通':'🚌','生活用品':'🛍️','衣服':'👕','娱乐':'🎮','其他':'✨','房租':'🔑','水电':'💡',
+  '保险':'🛡️','电话网络':'📱','工资':'💰','兼职':'🧑‍💻','其他收入':'🎁' };
+const DEBT_ICON = { Brother:'👨', Church:'⛪', Stewart:'🧑' };
+state.cents = ''; state.note = ''; state.date = ''; state.preset = false;
 
-/* 数字键盘 */
+const fmtCents = c => (Number(c || 0) / 100).toLocaleString('en-MY', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function buildPills(){   // 只负责更新金额显示（名字保留，其他地方会调用）
+  state.amount = state.cents ? (Number(state.cents) / 100).toFixed(2) : '';
+  if ($('amtShow')) $('amtShow').textContent = fmtCents(state.cents);
+  if ($('presetTip')) $('presetTip').textContent = state.preset ? `已选好：${state.cat} · ${state.pay}${state.note ? ' · ' + state.note : ''}` : '';
+}
+
+/* 数字键盘：数字从最后一位推进去，不用按小数点 */
 const BACK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 6H9l-6 6 6 6h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1z"/><path d="M14 10l-4 4M10 10l4 4"/></svg>';
-const KEYS = ['1','2','3','4','5','6','7','8','9','.','0','⌫'];
+const KEYS = ['1','2','3','4','5','6','7','8','9','00','0','⌫'];
 if ($('keys')) $('keys').innerHTML = KEYS.map(k => `<div class="key" data-k="${k}">${k === '⌫' ? BACK_SVG : k}</div>`).join('');
 on('keys', 'click', e => {
   const key = e.target.closest('.key'); if (!key) return;
   const k = key.dataset.k; buzz(6); sfx.tick();
-  if (k === '⌫') state.amount = state.amount.slice(0, -1);
-  else if (k === '.'){ if (!state.amount.includes('.')) state.amount = (state.amount || '0') + '.'; }
-  else {
-    const dot = state.amount.indexOf('.');
-    if (dot >= 0 && state.amount.length - dot > 2) return;   // 最多两位小数
-    if (state.amount.length >= 9) return;
-    state.amount = state.amount === '0' ? k : state.amount + k;
-  }
+  const rp = document.createElement('span'); rp.className = 'ripple';
+  const kr = key.getBoundingClientRect(); rp.style.width = rp.style.height = kr.width + 'px';
+  rp.style.left = (e.clientX - kr.left - kr.width / 2) + 'px'; rp.style.top = (e.clientY - kr.top - kr.width / 2) + 'px';
+  key.appendChild(rp); setTimeout(() => rp.remove(), 460);
+  if (k === '⌫') state.cents = state.cents.slice(0, -1);
+  else if (!state.cents && (k === '0' || k === '00')) return;        // 开头的 0 没意义
+  else if ((state.cents + k).length > 9) return;                      // 最多 9,999,999.99
+  else state.cents += k;
   buildPills();
+  const amt = $('amtShow') && $('amtShow').parentElement;
+  if (amt){ amt.classList.remove('bump'); void amt.offsetWidth; amt.classList.add('bump'); }
 });
-on('date', 'change', () => { dateTouched = true; });
+
+/* 底部弹出的步骤：类型 → 类别（或还给谁）→ 备注和付款方式 → 日期 → 保存 */
+let wizStack = [];
+function openWiz(step){ wizStack = []; showWiz(step); $('wiz').classList.add('show'); sfx.pop(); }
+function closeWiz(){ $('wiz').classList.remove('show'); }
+function nextWiz(step){ wizStack.push(curWiz); showWiz(step); }
+let curWiz = 'type';
+function opt(label, icon, data, on){ return `<button class="opt ${on ? 'on' : ''}" ${data}><span>${icon}</span>${label}</button>`; }
+function showWiz(step){
+  curWiz = step;
+  if ($('wizAmt')) $('wizAmt').textContent = 'RM ' + fmtCents(state.cents);
+  const T = $('wizTitle'), B = $('wizBody'); if (!T || !B) return;
+  $('wizBack').textContent = wizStack.length ? '← 返回' : '✕ 关闭';
+  if (step === 'type'){
+    T.textContent = '这一笔是？';
+    B.innerHTML = `<div class="opt-grid two">${TYPE_OPTS.map(([t, ic]) => opt(t, ic, `data-type="${t}"`, state.type === t)).join('')}</div>`;
+  } else if (step === 'cat'){
+    T.textContent = state.type === '收入' ? '哪一种收入？' : '花在哪一类？';
+    const list = state.type === '收入' ? CATS['收入'] : CATS['支出'].filter(c => c !== '还债');
+    B.innerHTML = `<div class="opt-grid">${list.map(c => opt(c, CAT_ICON[c] || '✨', `data-cat="${c}"`, state.cat === c)).join('')}</div>`;
+  } else if (step === 'debt'){
+    T.textContent = '还给谁？';
+    B.innerHTML = `<div class="opt-grid">${DEBTS.map(d => opt(d, DEBT_ICON[d] || '👤', `data-debt="${d}"`, state.debt === d)).join('')}</div>`;
+  } else if (step === 'note'){
+    T.textContent = '备注（可以不写）';
+    B.innerHTML = `<input id="wizNote" placeholder="例如：ZUS 咖啡" value="${(state.note || '').replace(/"/g, '&quot;')}">
+      <div class="muted" style="margin-top:12px">付款方式</div>
+      <div class="wiz-row">${PAYS.map(p => `<span class="pill ${p === state.pay ? 'on' : ''}" data-pay="${p}">${p}</span>`).join('')}</div>
+      <button class="btn" id="wizNext" style="margin-top:16px">下一步</button>`;
+  } else if (step === 'date'){
+    T.textContent = '哪一天？';
+    const d = state.date || today();
+    const y = new Date(); y.setDate(y.getDate() - 1);
+    const yest = `${y.getFullYear()}-${pad(y.getMonth()+1)}-${pad(y.getDate())}`;
+    B.innerHTML = `<input id="wizDate" type="date" value="${d}">
+      <div class="wiz-row"><span class="pill ${d === today() ? 'on' : ''}" data-day="${today()}">今天</span><span class="pill ${d === yest ? 'on' : ''}" data-day="${yest}">昨天</span></div>
+      <div class="muted" style="margin-top:12px">${state.type} · ${state.type === '还债' ? state.debt : state.cat} · ${state.pay}${state.note ? ' · ' + state.note : ''}</div>
+      <button class="btn" id="wizSave" style="margin-top:16px">✓ 确定保存</button>`;
+  }
+}
+on('wizBody', 'click', e => {
+  const t = e.target.closest('[data-type],[data-cat],[data-debt],[data-pay],[data-day],#wizNext,#wizSave'); if (!t) return;
+  buzz(6); sfx.tick();
+  if (t.dataset.type){
+    state.type = t.dataset.type;
+    if (state.type === '还债'){ state.cat = '还债'; return nextWiz('debt'); }
+    if (state.type === '转存'){ state.cat = '备用金'; return nextWiz('note'); }
+    state.cat = state.type === '收入' ? '工资' : '餐饮';
+    return nextWiz('cat');
+  }
+  if (t.dataset.cat){ state.cat = t.dataset.cat; return nextWiz('note'); }
+  if (t.dataset.debt){ state.debt = t.dataset.debt; return nextWiz('note'); }
+  if (t.dataset.pay){ state.pay = t.dataset.pay; store.set('lastPay', state.pay);
+    document.querySelectorAll('#wizBody [data-pay]').forEach(x => x.classList.toggle('on', x === t)); return; }
+  if (t.dataset.day){ state.date = t.dataset.day; if ($('wizDate')) $('wizDate').value = state.date;
+    document.querySelectorAll('#wizBody [data-day]').forEach(x => x.classList.toggle('on', x === t)); return; }
+  if (t.id === 'wizNext'){ state.note = (($('wizNote') && $('wizNote').value) || '').trim(); return nextWiz('date'); }
+  if (t.id === 'wizSave'){ state.date = ($('wizDate') && $('wizDate').value) || today(); return saveRecord(); }
+});
+on('wizBody', 'change', e => { if (e.target.id === 'wizDate') state.date = e.target.value; });
+on('wizBack', 'click', () => {
+  if (curWiz === 'note' && $('wizNote')) state.note = $('wizNote').value.trim();
+  if (wizStack.length) showWiz(wizStack.pop()); else closeWiz();
+});
+on('wiz', 'click', e => { if (e.target.id === 'wiz') closeWiz(); });   // 点空白处关掉，金额还在
+on('nextBtn', 'click', () => {
+  if (!state.cents) return toast('先输入金额');
+  openWiz(state.preset ? 'date' : 'type');
+});
 
 /* 保存一笔：先存在手机里，再上传 */
 function saveRecord(){
   if (saving) return;
-  const amount = parseFloat(state.amount);
-  if (!amount || amount <= 0) return toast('先输入金额');
+  const amount = Number(state.cents || 0) / 100;
+  if (!amount || amount <= 0){ closeWiz(); return toast('先输入金额'); }
   saving = true; setTimeout(() => { saving = false; }, 800);
   const rec = {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    date: ($('date') && $('date').value) || today(),
+    date: state.date || today(),
     type: state.type, category: state.cat, amount,
     pay: state.pay, debtTo: state.type === '还债' ? state.debt : '',
-    note: (($('note') && $('note').value) || '').trim(), by: '我', receipt: '',
+    note: state.note || '', by: '我', receipt: '',
   };
   records.unshift(rec); queue.push(rec.id);
   store.set('records', records); store.set('queue', queue);
   const extra = comboXP(); xpPop('+' + (10 + extra) + ' XP' + (extra ? '  连击！' : ''));
-  state.amount = ''; if ($('note')) $('note').value = '';
-  dateTouched = false; if ($('date')) $('date').value = today();
-  buildPills(); buzz(18);
+  state.cents = ''; state.note = ''; state.date = ''; state.preset = false;
+  closeWiz(); buildPills(); buzz(18);
   celebrate(rec);
   flush(); go('home');
 }
-on('saveBtn', 'click', saveRecord);
 
-/* 常用快捷：最常记的 4 笔（不含发薪分配）*/
+/* 常用快捷：点一下就带入金额、类别、付款方式和备注，再按确定只要选日期 */
 function renderQuick(){
   const el = $('quick'); if (!el) return;
   const cnt = {};
@@ -556,8 +612,8 @@ function renderQuick(){
   el.onclick = e => {
     const t = e.target.closest('[data-i]'); if (!t) return;
     const [c, a, p, n] = top[+t.dataset.i];
-    state.type = '支出'; state.cat = c; state.amount = String(+a); state.pay = p;
-    if ($('note')) $('note').value = n || '';
+    state.type = '支出'; state.cat = c; state.pay = p; state.note = n || '';
+    state.cents = String(Math.round(+a * 100)); state.preset = true;
     sfx.pop(); buzz(8); buildPills();
   };
 }
@@ -606,36 +662,248 @@ on('paydaySave', 'click', () => {
 on('paydayCancel2', 'click', () => $('payday').classList.remove('show'));
 
 /* ===== 首页 ===== */
+/* ===== 记账场景：Alien 一步一步演出来 ===== */
+Object.assign(sfx, {
+  nom(){ this.tone(300,0,0.07,'square',0.06,0.7); },
+  ah(){ this.tone(420,0,0.16,'sine',0.09,1.6); },
+  beep(){ this.tone(660,0,0.12,'square',0.06); this.tone(660,0.18,0.12,'square',0.06); },
+  step(){ this.tone(180,0,0.03,'triangle',0.04); },
+  boom(){ this.tone(140,0,0.4,'sawtooth',0.08,0.4); },
+});
 const SCENE_MAP = {
-  '餐饮': { prop:'🍜', title:'开吃！', text:'咬一口 {amt}，好吃！' },
-  '交通': { prop:'🚌', title:'出发啦！', text:'坐车去 {note}' },
-  '娱乐': { prop:'🎮', title:'Luna：又去玩？', text:'{amt}，记下了' },
-  '生活用品': { prop:'🛍️', title:'买好东西啦', text:'{amt}' },
-  '衣服': { prop:'👕', title:'Luna：衣服还不够多？', text:'{amt}' },
-  '房租': { prop:'🔑', title:'房租交好了', text:'{amt}，这个月住得安心' },
-  '水电': { prop:'💡', title:'水电付好啦', text:'{amt}' },
-  '保险': { prop:'🛡️', title:'保险在保护你', text:'{amt}' },
-  '电话网络': { prop:'📱', title:'网络续费啦', text:'{amt}' },
-  '还债': { prop:'⚔️', title:'攻击 {debt}！', text:'-{amt}' },
-  '收入': { prop:'💰', title:'钱进来啦！', text:'+{amt}' },
-  '转存': { prop:'🔒', title:'存进备用金', text:'+{amt}，Luna 说存得好' },
-  '其他': { prop:'✨', title:'记好啦', text:'{amt}' },
+  '餐饮':    {kind:'eat',   title:'开吃！',        text:'Aylin 吃掉 {amt}，Luna 在旁边盯着'},
+  '交通':    {kind:'ride',  title:'出发啦！',      text:'Aylin 和 Luna 坐车去 {note}'},
+  '娱乐':    {kind:'carry', prop:'🎮', title:'Luna：又去玩？', text:'{amt}，记下了'},
+  '生活用品':{kind:'carry', prop:'🛍️', title:'买好东西啦', text:'{amt}'},
+  '衣服':    {kind:'carry', prop:'👕', title:'Luna：衣服还不够多？', text:'{amt}'},
+  '房租':    {kind:'carry', prop:'🔑', title:'房租交好了', text:'{amt}，这个月住得安心'},
+  '水电':    {kind:'carry', prop:'💡', title:'水电付好啦', text:'{amt}'},
+  '保险':    {kind:'carry', prop:'🛡️', title:'保险在保护你', text:'{amt}'},
+  '电话网络':{kind:'carry', prop:'📱', title:'网络续费啦', text:'{amt}'},
+  '还债':    {kind:'zap',   title:'攻击 {debt}！', text:'-{amt}'},
+  '收入':    {kind:'cheer', title:'钱进来啦！',    text:'+{amt}'},
+  '转存':    {kind:'save',  title:'存进备用金',    text:'+{amt}，Luna 说存得好'},
+  '其他':    {kind:'carry', prop:'✨', title:'记好啦', text:'{amt}'},
 };
-let sceneT = null;
-function celebrate(rec){
-  const key = rec.type === '还债' ? '还债' : rec.type === '收入' ? '收入' : rec.type === '转存' ? '转存' : rec.category;
-  const m = SCENE_MAP[key] || SCENE_MAP['其他'];
-  if (rec.type === '收入') sfx.fanfare(); else if (rec.type === '还债') sfx.zap(); else if (rec.type === '转存') sfx.whoosh(); else sfx.coin();
-  const fill = s => s.replace('{amt}', money(rec.amount)).replace('{debt}', rec.debtTo || '').replace('{note}', rec.note || '某个地方');
-  const st = $('stage'); if (st) st.innerHTML = `<div class="sc-who">${alienSVG(rec.type === '还债' ? 'tense' : 'happy')}</div><div class="sc-prop">${m.prop}</div>`;
-  if ($('sTitle')) $('sTitle').textContent = fill(m.title);
-  if ($('sText')) $('sText').textContent = fill(m.text);
-  const sc = $('scene'); if (!sc) return;
-  sc.classList.add('show');
-  clearTimeout(sceneT); sceneT = setTimeout(hideScene, 2400);
+const STAGE_H = 210, AW = 76, AH = 118;
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const PROP_POOL = {
+  '娱乐':['🎮','🎬','🎤','🎳','🎨'], '生活用品':['🛍️','🧴','🧻','🪥','🧽'], '衣服':['👕','👗','👟','🧢','🧦'],
+  '房租':['🔑','🏠'], '水电':['💡','🚿','🔌'], '保险':['🛡️','📄'], '电话网络':['📱','📶','💻'], '其他':['✨','🎁','📦','🧸'],
+};
+const pickProp = (key, fallback) => PROP_POOL[key] ? pick(PROP_POOL[key]) : fallback;
+let sceneRun = 0;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const alive = run => run === sceneRun;
+function spawn(cls, html=''){ const d = document.createElement('div'); d.className = cls; d.innerHTML = html; $('stage').appendChild(d); return d; }
+function at(node, x, y, ms=0, ease='linear', extra=''){
+  node.style.transition = ms ? `transform ${ms}ms ${ease}, opacity ${ms}ms` : 'none';
+  node.style.transform = `translate(${x}px,${y}px) ${extra}`;
 }
-function hideScene(){ const sc = $('scene'); if (sc) sc.classList.remove('show'); clearTimeout(sceneT); }
-on('scene', 'click', hideScene);
+function actor(opts={}, hold){
+  if (hold === undefined) hold = opts.who === 'partner' ? '' : store.get('item', '');
+  const a = spawn('actor', `<div class="sprite"></div>${hold ? `<span class="hold">${hold}</span>` : ''}`);
+  a._o = Object.assign({eyes:'dot', mouth:'flat', legs:'stand', arms:'down'}, opts);
+  pose(a, {}); return a;
+}
+/* 伴侣：笑眯眯，会撒爱心 */
+function partner(opts={}){ return actor(Object.assign({who:'partner', eyes:'dot', mouth:'smile'}, opts)); }
+function mad(x, y){ const t = spawn('floaty', '💢'); at(t, x-40, y); }
+function heart(x, y){ const t = spawn('floaty', '💗'); at(t, x-40, y); }
+function pose(a, opts){ Object.assign(a._o, opts); a.querySelector('.sprite').innerHTML = alienSprite(a._o); }
+function floatText(text, x, y){ const t = spawn('floaty', text); at(t, x-40, y); }
+async function walk(a, x0, x1, y, ms, run){
+  at(a, x0, y); await sleep(20); at(a, x1, y, ms);
+  let f = 0;
+  const t = setInterval(() => { if (!alive(run)) return clearInterval(t); f ^= 1; pose(a, {legs: f ? 'walk1' : 'walk2'}); if (f) sfx.step(); }, 150);
+  await sleep(ms); clearInterval(t); pose(a, {legs:'stand'});
+}
+async function hop(a, x, y, h=16){ at(a, x, y-h, 170, 'ease-out'); await sleep(180); at(a, x, y, 200, 'ease-in'); await sleep(210); }
+function foodEmoji(rec){
+  const n = (rec.note || '').toLowerCase();
+  if (/奶茶|tealive|chagee|boba|teh/.test(n)) return '🧋';
+  if (/咖啡|coffee|kopi|zus|starbucks/.test(n)) return '☕';
+  if (/mixue|冰淇淋|雪糕/.test(n)) return pick(['🍦','🍧']);
+  const h = new Date().getHours();
+  return pick(h < 11 ? ['🥐','🍞','🥟','🍙','🍜','🥚'] : h < 16 ? ['🍜','🍛','🍱','🍔','🍝','🥗','🍚'] : ['🍱','🍲','🍗','🍣','🍕','🍜','🥘']);
+}
+
+/* 餐饮：食物出现 → 张大嘴 → 食物飞进嘴 → 咀嚼 → 满足 */
+async function sceneEat(rec, run, W){
+  const x = (W-AW)/2 + 24, y = STAGE_H-AH-8, px = x-70;
+  const her = partner(); at(her, px, y+90);
+  const a = actor({mouth:'flat'});
+  at(a, x, y+90); await sleep(20);
+  at(a, x, y, 450, 'cubic-bezier(.2,1.5,.4,1)'); at(her, px, y, 520, 'cubic-bezier(.2,1.5,.4,1)'); await sleep(520); if (!alive(run)) return;
+  const food = spawn('thing', foodEmoji(rec)); food.style.opacity = 0; at(food, x+AW-6, 22);
+  await sleep(20); food.style.transition = 'opacity .25s'; food.style.opacity = 1;
+  pose(a, {eyes:'up'}); await sleep(450); if (!alive(run)) return;      // 呆呆盯着食物
+  pose(a, {mouth:'wide'}); sfx.ah(); await sleep(260); if (!alive(run)) return;
+  at(food, x+AW*0.48-22, y+AH*0.6-24, 420, 'cubic-bezier(.5,0,.8,.4)', 'scale(.3)'); await sleep(430); if (!alive(run)) return;
+  food.style.opacity = 0; pose(a, {mouth:'line', eyes:'closed'});
+  for (let i=0; i<6; i++){ await sleep(150); if (!alive(run)) return; pose(a, {mouth: i%2 ? 'line' : 'open'}); if (i%2===0) sfx.nom(); }
+  pose(a, {mouth:'pout', eyes:'dot'}); sfx.coin(); floatText('-'+money(rec.amount), x+AW/2, y-4);
+  if (rec.amount > 14){   // 一餐超过每日餐饮额度，Luna 会生气
+    pose(her, {eyes:'stern', mouth:'pout'}); mad(px+AW/2, y+10); sfx.error();
+    $('sText').textContent = 'Luna：一餐 '+money(rec.amount)+'？超过每天 RM14 了！';
+  } else { pose(her, {mouth:'smile'}); heart(px+AW/2, y+10); await hop(her, px, y); }
+}
+
+/* 交通：车开进站 → Alien 走过去 → 上车 → 窗口露脸 → 喇叭 → 开走 */
+const BUS_SVG = `<svg viewBox="0 0 150 84" width="150" height="84" shape-rendering="crispEdges">
+  <rect x="2" y="6" width="146" height="58" rx="10" fill="#b6ffc0"/>
+  <rect x="2" y="46" width="146" height="7" fill="#1fa80a"/>
+  <rect x="12" y="12" width="48" height="32" rx="4" fill="#0b1f0e"/>
+  <rect x="66" y="12" width="30" height="32" rx="4" fill="#0b1f0e"/>
+  <rect x="104" y="12" width="26" height="46" rx="3" fill="#0b1f0e"/>
+  <rect x="116" y="12" width="2" height="46" fill="#1fa80a"/>
+  <rect x="139" y="38" width="7" height="7" fill="#ffd23f"/>
+  <rect x="20" y="1" width="110" height="6" rx="3" fill="#39ff14"/>
+  <circle cx="34" cy="66" r="12" fill="#111"/><circle cx="34" cy="66" r="5" fill="#9aa0a6"/>
+  <circle cx="116" cy="66" r="12" fill="#111"/><circle cx="116" cy="66" r="5" fill="#9aa0a6"/>
+</svg>`;
+async function sceneRideAlt(rec, run, W){
+  const v = pick(['🚕','🛵','🚇','🚲','🛺','🚗']);
+  const vy = STAGE_H - 74, vx = W - 112;
+  const car = spawn('thing', `<span style="font-size:64px;display:inline-block;transform:scaleX(-1)">${v}</span>`);
+  at(car, W + 10, vy); await sleep(20); at(car, vx, vy, 650, 'cubic-bezier(.2,.8,.3,1)'); await sleep(500); sfx.beep(); await sleep(200); if (!alive(run)) return;
+  const ay = STAGE_H - AH - 8, tx = Math.max(4, vx - 44);
+  const a = actor({ mouth:'flat' });
+  await walk(a, -AW, tx, ay, 1100, run); if (!alive(run)) return;
+  pose(a, { eyes:'up' }); await sleep(200);
+  at(a, tx + 30, ay - 6, 250, 'ease-out', 'scale(.6)'); a.style.opacity = 0; await sleep(280); if (!alive(run)) return;
+  sfx.whoosh(); at(car, W + 70, vy, 900, 'cubic-bezier(.6,0,.9,.5)');
+  for (let i = 0; i < 3; i++){ const d = spawn('thing puff', '💨'); at(d, vx - 6 + i * 30, vy + 30); await sleep(180); if (!alive(run)) return; }
+}
+async function sceneRide(rec, run, W){
+  if (Math.random() < 0.5) return sceneRideAlt(rec, run, W);
+  const busW = 150, busH = 84, by = STAGE_H-busH-10, bx = W-busW-6;
+  const bus = spawn('thing bus', BUS_SVG
+    + `<div class="win"><div class="mini">${alienSprite({eyes:'dot', mouth:'flat'})}</div></div>`
+    + `<div class="win w2"><div class="mini on">${alienSprite({who:'partner', eyes:'happy', mouth:'smile'})}</div></div>`);
+  at(bus, W+10, by); await sleep(20); at(bus, bx, by, 700, 'cubic-bezier(.2,.8,.3,1)'); await sleep(500); sfx.beep(); await sleep(220); if (!alive(run)) return;
+  const ay = STAGE_H-AH-8, doorX = Math.max(4, bx+117-AW/2);
+  const a = actor({mouth:'flat'});
+  await walk(a, -AW, doorX, ay, 1200, run); if (!alive(run)) return;
+  pose(a, {eyes:'up'}); heart(bx+81, by); await sleep(260);            // 伴侣在车上等她
+  at(a, doorX, ay-8, 260, 'ease-out', 'scale(.7)'); a.style.opacity = 0; await sleep(280); if (!alive(run)) return;
+  bus.querySelector('.mini').style.opacity = 1; sfx.poke(); await sleep(350); if (!alive(run)) return;
+  sfx.beep(); bus.classList.add('rumble'); await sleep(600); if (!alive(run)) return;
+  bus.classList.remove('rumble');
+  at(bus, W+40, by, 1100, 'cubic-bezier(.6,0,.9,.5)');
+  for (let i=0; i<4; i++){ const d = spawn('thing puff', '💨'); at(d, bx-6+i*36, by+busH-28); await sleep(200); if (!alive(run)) return; }
+}
+
+/* 收入：金币从天上掉下来，Alien 张嘴举手跳 */
+async function sceneCheer(rec, run, W){
+  const x = (W-AW)/2 + 24, y = STAGE_H-AH-8, px = x-70;
+  const her = partner({arms:'up', mouth:'open'}); at(her, px, y+90);
+  const a = actor({eyes:'up', mouth:'open', arms:'up'});
+  at(a, x, y+90); await sleep(20); at(a, x, y, 450, 'cubic-bezier(.2,1.5,.4,1)'); at(her, px, y, 520, 'cubic-bezier(.2,1.5,.4,1)');
+  setTimeout(() => { if (alive(run)){ heart(px+AW/2, y); hop(her, px, y, 20); } }, 900);
+  for (let i=0; i<10; i++){
+    const c = spawn('thing coin', pick(['🪙','💵','💰','💎'])); at(c, Math.random()*(W-30), -34);
+    setTimeout(() => {
+      if (!alive(run)) return;
+      at(c, x+AW/2-12+(Math.random()*30-15), y+AH*0.5, 650, 'cubic-bezier(.5,0,1,1)');
+      setTimeout(() => { c.style.opacity = 0; if (alive(run) && i%2) sfx.coin(); }, 650);
+    }, 120+i*130);
+  }
+  await sleep(300);
+  for (let k=0; k<3; k++){ if (!alive(run)) return; pose(a, {mouth:'wide'}); await hop(a, x, y, 24); pose(a, {mouth:'open'}); }
+  sfx.fanfare(); pose(a, {mouth:'tongue', arms:'down', eyes:'dot'}); pose(her, {mouth:'smile', arms:'down'});
+  floatText('+'+money(rec.amount), x+AW/2, y-4);
+}
+
+/* 还债：BOSS 站右边，Alien 发射绿色光线，血条掉，被打败就爆掉 */
+async function sceneZap(rec, run, W){
+  const name = rec.debtTo, start = DEBT_START[name] || 1;
+  const after = Math.max(0, start-debtPaid(name)), before = Math.min(start, after+rec.amount);
+  const bw = 84, bh = 60, bx = W-bw-14, byy = STAGE_H-bh-34;
+  const boss = spawn('thing', `<div class="bbody" style="width:${bw}px;height:${bh}px">${bossSVG(0,false)}</div>`); at(boss, bx, byy);
+  const tag = spawn('thing tag', name); at(tag, bx, byy+bh+18);
+  const hp = spawn('hpmini', '<i></i>'); hp.style.width = bw+'px'; at(hp, bx, byy+bh+8); hp.firstChild.style.width = (before/start*100)+'%';
+  const x = 56, y = STAGE_H-AH-8;
+  const her = partner({arms:'up', mouth:'open'}); at(her, -6, y+6);   // 伴侣在后面打气
+  const a = actor({mouth:'pout'});
+  await walk(a, -AW, x, y, 600, run); if (!alive(run)) return;
+  pose(a, {arms:'up', mouth:'open'}); await sleep(220); if (!alive(run)) return;
+  const beam = spawn('beam'); const sx = x+AW-12, sy = y+38, len = Math.max(20, bx+12-sx);
+  beam.style.width = len+'px'; at(beam, sx, sy, 0, 'linear', 'scaleX(0)'); await sleep(20);
+  at(beam, sx, sy, 180, 'linear', 'scaleX(1)'); sfx.zap(); await sleep(200); if (!alive(run)) return;
+  beam.style.opacity = 0; boss.classList.add('hitbox'); hp.firstChild.style.width = (after/start*100)+'%';
+  floatText('-'+money(rec.amount), bx+bw/2, byy-26);
+  await sleep(650); if (!alive(run)) return;
+  boss.classList.remove('hitbox'); pose(a, {arms:'down', mouth:'flat', eyes:'side'}); heart(30, y);
+  if (after <= 0){
+    boss.innerHTML = `<div style="width:${bw}px;height:${bh}px">${bossSVG(0,true)}</div>`;
+    sfx.boom(); at(boss, bx, byy-30, 600, 'ease-out', 'rotate(360deg) scale(.3)'); boss.style.opacity = 0;
+    await sleep(450); sfx.fanfare(); $('sTitle').textContent = `${name} 被击败了！🏆`;
+    pose(a, {mouth:'tongue', arms:'up'}); await hop(a, x, y, 24);
+  }
+}
+
+/* 转存：Alien 走到存钱猪旁边，把金币丢进去 */
+async function sceneSave(rec, run, W){
+  const px = W-84, py = STAGE_H-72;
+  const pig = spawn('thing', '<span class="pg">' + pick(['🐷','🏦','🫙','💰']) + '</span>'); at(pig, px, py);
+  const x = 30, y = STAGE_H-AH-8;
+  const her = partner(); at(her, px-58, y);                         // 伴侣在存钱猪旁边等
+  const a = actor({mouth:'flat'});
+  await walk(a, -AW, x, y, 900, run); if (!alive(run)) return;
+  pose(a, {arms:'up', eyes:'up'});
+  const c = spawn('thing coin', pick(['🪙','💵','💰','💎'])); at(c, x+AW-16, y+30); await sleep(20);
+  c.style.transition = 'transform .6s cubic-bezier(.3,-0.6,.7,1), opacity .2s';
+  c.style.transform = `translate(${px+16}px,${py+4}px)`; sfx.whoosh(); await sleep(620); if (!alive(run)) return;
+  c.style.opacity = 0; pig.classList.add('boing'); sfx.coin();
+  floatText('+'+money(rec.amount), px+26, py-10); pose(a, {arms:'down', mouth:'pout', eyes:'dot'});
+  pose(her, {mouth:'open', arms:'up'}); heart(px-58+AW/2, y);
+}
+
+/* 其他消费：Alien 拿着东西走进来，举起来跳一下 */
+async function sceneCarry(rec, run, W, prop){
+  const x = (W-AW)/2 + 24, y = STAGE_H-AH-8, px = x-70;
+  const her = partner();
+  const a = actor({mouth:'flat'}, prop);
+  await Promise.all([walk(a, -AW, x, y, 1000, run), walk(her, -AW-70, px, y, 1000, run)]); if (!alive(run)) return;
+  pose(a, {eyes:'up', arms:'up', mouth:'open'}); a.classList.add('lift');
+  sfx.coin(); floatText('-'+money(rec.amount), x+AW/2, y-30);
+  if (/🎮|👕/.test(prop) || rec.amount > 50){ pose(her, {eyes:'stern', mouth:'pout'}); mad(px+AW/2, y+10); }
+  else { pose(her, {mouth:'smile'}); heart(px+AW/2, y+10); }
+  await hop(a, x, y); pose(a, {mouth:'pout', eyes:'dot'});
+}
+
+async function runScene(rec){
+  const run = ++sceneRun;
+  const st = $('stage');
+  st.innerHTML = `<div class="ground"></div><div class="stage-moon">${planetSVG('moon')}</div>`;
+  $('scene').classList.add('show');
+  const W = st.clientWidth || 300;
+  const key = rec.type==='还债' ? '还债' : rec.type==='收入' ? '收入' : rec.type==='转存' ? '转存' : rec.category;
+  const m = SCENE_MAP[key] || SCENE_MAP['其他'];
+  const fill = s => s.replace('{amt}', money(rec.amount)).replace('{debt}', rec.debtTo||'').replace('{note}', rec.note||'某个地方');
+  $('sTitle').textContent = fill(m.title);
+  $('sText').textContent = fill(m.text);
+  try{
+    if (m.kind==='eat')        await sceneEat(rec, run, W);
+    else if (m.kind==='ride')  await sceneRide(rec, run, W);
+    else if (m.kind==='cheer') await sceneCheer(rec, run, W);
+    else if (m.kind==='zap')   await sceneZap(rec, run, W);
+    else if (m.kind==='save')  await sceneSave(rec, run, W);
+    else                       await sceneCarry(rec, run, W, pickProp(key, m.prop));
+  }catch(e){}
+  if (!alive(run)) return;
+  await sleep(1300);
+  if (alive(run)) hideScene();
+}
+function showScene(rec){ runScene(rec); }
+function hideScene(){ sceneRun++; $('scene').classList.remove('show'); }
+$('scene').onclick = hideScene;
+
+
+function celebrate(rec){ showScene(rec); }
+
+
 
 let sayT = null;
 function alienSay(text, ms = 2400){
@@ -752,21 +1020,21 @@ function renderSchool(){
 }
 
 /* 衣柜：等级解锁配件，戴在 Aylin 身上 */
-const OUTFITS = [
-  { lv:1, ic:'🎀', n:'校服' }, { lv:2, ic:'🎧', n:'耳机' }, { lv:3, ic:'🎒', n:'书包' },
-  { lv:4, ic:'🕶️', n:'墨镜' }, { lv:5, ic:'🛸', n:'飞碟' },
+const OUTFITS = [   // 道具箱：等级解锁，Aylin 会带在身边，记账动画里也拿着
+  { lv:1, ic:'🎈', n:'气球' }, { lv:2, ic:'🛹', n:'滑板' }, { lv:3, ic:'🔭', n:'望远镜' },
+  { lv:4, ic:'🪐', n:'小行星' }, { lv:5, ic:'🛸', n:'飞碟' },
 ];
 const curLevel = () => Math.floor(getXP() / 100) + 1;
-const accHTML = () => { const o = store.get('outfit', '🎀'); return o === '🎀' ? '' : `<span class="acc">${o}</span>`; };
+const accHTML = () => { const o = store.get('item', ''); return o ? `<span class="acc">${o}</span>` : ''; };
 function renderWardrobe(){
-  const lv = curLevel(), cur = store.get('outfit', '🎀');
+  const lv = curLevel(), cur = store.get('item', '');
   if ($('wardrobe')) $('wardrobe').innerHTML = OUTFITS.map(o =>
     `<button class="wd ${lv < o.lv ? 'lock' : ''} ${cur === o.ic ? 'on' : ''}" data-o="${o.ic}" data-lv="${o.lv}">${lv < o.lv ? '🔒' : o.ic}<small>${lv < o.lv ? 'LV ' + o.lv : o.n}</small></button>`).join('');
 }
 on('wardrobe', 'click', e => {
   const b = e.target.closest('[data-o]'); if (!b) return;
   if (curLevel() < +b.dataset.lv) return toast(`要到 LV ${b.dataset.lv} 才能解锁`);
-  store.set('outfit', b.dataset.o); sfx.pop(); buzz(8); renderHome(); toast('换上了 ' + b.dataset.o);
+  const now = store.get('item', '') === b.dataset.o ? '' : b.dataset.o; store.set('item', now); sfx.pop(); buzz(8); renderHome(); toast(now ? 'Aylin 带上了 ' + now : '道具收起来了');
 });
 
 /* 隐藏成就：没解锁前只显示问号 */
