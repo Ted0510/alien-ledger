@@ -379,21 +379,6 @@
   .pd-row input[type=number]{width:110px;margin:0;padding:9px 10px;text-align:right}
   #payday .scene-card{max-height:86vh;overflow:auto}
 
-  /* 校园 */
-  .campus{position:relative;height:460px;border-radius:28px;overflow:hidden;
-    background:linear-gradient(180deg,#0b2414,#06100a);border:1px solid rgba(57,255,20,.18)}
-  .bld{position:absolute;width:104px;height:84px;border-radius:20px;background:rgba(57,255,20,.07);color:var(--text);border:1px solid rgba(57,255,20,.2);font:inherit;font-size:26px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:transform .15s, background .2s}
-  .bld:active{transform:scale(.94)} .bld:hover{background:rgba(57,255,20,.16)}
-  .spot{position:absolute;width:104px;height:84px;border-radius:20px;background:rgba(57,255,20,.07);
-    border:1px solid rgba(57,255,20,.2);display:flex;flex-direction:column;align-items:center;justify-content:center;
-    font-size:26px;text-align:center}
-  .spot small{font-size:12px;color:var(--mint);margin-top:2px}
-  .walker{position:absolute;width:96px;height:132px;z-index:2;transition:left 1.8s ease-in-out, top 1.8s ease-in-out}
-  .walker.walking{animation:hopc .5s ease-in-out infinite}
-  @keyframes hopc{50%{transform:translateY(-5px)}}
-  .campus-say{position:absolute;left:10px;right:10px;bottom:10px;z-index:3;padding:10px 12px;border-radius:16px;
-    background:rgba(0,0,0,.65);border:1px solid rgba(57,255,20,.2);color:var(--mint);font-size:14px;line-height:1.5}
-
   @media (prefers-reduced-motion: reduce){
     *{animation:none !important; transition:none !important}
   }
@@ -463,10 +448,6 @@
     <div class="row"><div><b>💰 发薪了吗？</b><div class="muted">一键记下工资、房租、保险、水电、电话和还债</div></div>
     <button class="pill on" id="paydayOpen">发薪分配</button></div>
   </div>
-  <div class="card row">
-    <div><b>🏫 校园</b><div class="muted">看看 Aylin 和 Luna 在做什么</div></div>
-    <button class="pill on" id="campusOpen">去看看</button>
-  </div>
   <div class="card">
     <div class="muted" style="margin-bottom:6px">最近 5 笔</div>
     <div id="recent5"></div>
@@ -521,22 +502,6 @@
   <p class="muted">这里显示这台手机记的账；完整流水以表格为准。</p>
 </section>
 
-<!-- 校园 -->
-<section id="page-campus" class="hidden">
-  <h1>🏫 Alien 学校</h1>
-  <div class="campus" id="campus">
-    <button class="bld" data-go="home" style="left:8%;top:8%">🏃<small>操场</small></button>
-    <button class="bld" data-go="add" style="left:56%;top:8%">🏫<small>教室</small></button>
-    <button class="bld" data-go="log" style="left:8%;top:40%">📚<small>图书馆</small></button>
-    <button class="bld" data-go="add" data-scroll="quick" style="left:56%;top:40%">🏪<small>小卖部</small></button>
-    <button class="bld" data-go="home" data-scroll="bosses" style="left:8%;top:72%">📋<small>布告栏</small></button>
-    <button class="bld" data-go="cfg" style="left:56%;top:72%">🏛️<small>校长室</small></button>
-    <div class="walker" id="wAylin"></div>
-    <div class="walker" id="wLuna"></div>
-    <div class="campus-say" id="campusSay">欢迎来到 Alien 学校</div>
-  </div>
-  <p class="muted">点楼就能进去。Aylin 和 Luna 会自己走动，经过楼时说一句小知识。</p>
-</section>
 <!-- 设定 -->
 <section id="page-cfg" class="hidden">
   <h1>设定</h1>
@@ -548,7 +513,7 @@
 </section>
 
 <nav class="dock" id="dock">
-  <button data-go="campus" class="on" aria-label="首页">
+  <button data-go="home" class="on" aria-label="首页">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/></svg>
     首页
   </button>

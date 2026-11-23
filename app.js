@@ -437,13 +437,12 @@ async function pull(){
 }
 
 /* ===== 页面切换 ===== */
-const PAGES = ['home', 'add', 'log', 'cfg', 'campus'];
+const PAGES = ['home', 'add', 'log', 'cfg'];
 function go(page){
   curPage = page;
   PAGES.forEach(p => { const el = $('page-' + p); if (el) el.classList.toggle('hidden', p !== page); });
   document.querySelectorAll('#dock [data-go]').forEach(b => b.classList.toggle('on', b.dataset.go === page));
   if (page === 'add' && !dateTouched && $('date')) $('date').value = today();
-  if (page !== 'campus') campusStop(); else campusStart();
   if (page === 'home') renderHome();
   if (page === 'log'){ renderLog(); pull(); }
   if (page === 'add') renderQuick();
@@ -829,61 +828,13 @@ on('sndToggle', 'click', () => { sfx.on = !sfx.on; store.set('sound', sfx.on); p
 on('musToggle', 'click', () => { bgm.on = !bgm.on; store.set('music', bgm.on); paintToggles(); bgm.on ? bgm.start() : bgm.stop(); });
 on('testUpload', 'click', () => flush(true));
 
-/* ===== 校园：两个人自己走动，经过地点冒出小知识 ===== */
-const SPOT_POS = { field:{x:8,y:8}, class:{x:56,y:8}, lib:{x:8,y:40}, shop:{x:56,y:40}, board:{x:8,y:72}, office:{x:56,y:72} };
-const SPOT_KEYS = Object.keys(SPOT_POS);
-const SPOT_SAY = {
-  field: () => 'Aylin：走走路，心情好，就不想乱花钱。',
-  class: () => 'Luna：' + TIPS[Math.floor(Math.random() * TIPS.length)].replace(/^[^：]+：/, ''),
-  lib:   () => TIPS[Math.floor(Math.random() * TIPS.length)],
-  shop:  () => 'Luna：买之前先等 24 小时。',
-  board: () => '布告栏：' + TIPS[Math.floor(Math.random() * TIPS.length)],
-  office: () => 'Luna：设定在这里，网址和 PIN 别外传。',
-};
-let campusT = null;
-function campusInit(){
-  const a = $('wAylin'), l = $('wLuna');
-  if (a && !a.innerHTML) a.innerHTML = alienSprite({ eyes:'dot', mouth:'flat' });
-  if (l && !l.innerHTML) l.innerHTML = alienSprite({ who:'partner', eyes:'happy', mouth:'smile' });
-  if (a) { a.style.left = '30%'; a.style.top = '26%'; }
-  if (l) { l.style.left = '62%'; l.style.top = '62%'; }
-}
-function campusWalk(el, who, s){
-  const p = SPOT_POS[s], jx = Math.random() * 6 - 3, jy = Math.random() * 4 - 2;
-  el.classList.add('walking');
-  el.style.left = (p.x + (who === 'L' ? 8 : -2) + jx) + '%';
-  el.style.top  = (p.y + 22 + jy) + '%';
-  setTimeout(() => { el.classList.remove('walking'); campusSay(s); }, 1900);
-}
-function campusSay(s){
-  const el = $('campusSay'); if (el && SPOT_SAY[s]) el.textContent = SPOT_SAY[s]();
-}
-function campusMove(){
-  const a = $('wAylin'), l = $('wLuna'); if (!a || !l) return;
-  const pick = () => SPOT_KEYS[Math.floor(Math.random() * SPOT_KEYS.length)];
-  campusWalk(a, 'A', pick());
-  setTimeout(() => campusWalk(l, 'L', pick()), 400);
-}
-function campusStart(){
-  campusInit(); campusStop();
-  setTimeout(campusMove, 300);
-  campusT = setInterval(campusMove, 6000);
-}
-function campusStop(){ clearInterval(campusT); campusT = null; }
-on('campusOpen', 'click', () => go('campus'));
-document.querySelectorAll('#campus .bld').forEach(b => b.addEventListener('click', () => {
-  const page = b.dataset.go, anchor = b.dataset.scroll;
-  go(page);
-  if (anchor) setTimeout(() => { const el = $(anchor); if (el) el.scrollIntoView({ behavior:'smooth', block:'start' }); }, 250);
-}));
-
 /* ===== 启动 ===== */
 function boot(){
   paintToggles();
   if (!configured()){ showSetup(true); return; }
   showSetup(false);
   buildPills();
-  go(location.hash === '#add' ? 'add' : 'campus');
+  go(location.hash === '#add' ? 'add' : 'home');
   flush(); pull();
 }
 window.addEventListener('online', () => flush());
